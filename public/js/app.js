@@ -11,19 +11,35 @@ const App = {
             App.UI.router.go('home');
             setTimeout(() => document.getElementById('preloader').style.opacity = '0', 500);
             setTimeout(() => document.getElementById('preloader').remove(), 1000);
+
+            // Connect Socket.io for Live News
+            const socket = io();
+            socket.on('news-update', (articles) => {
+                Utils.toast(`⚡ ${articles.length} New Headlines`, 'ai');
+                // Prepend to current news state
+                const current = App.State.newsData;
+                // Merge and deduplicate by URL
+                const combined = [...articles, ...current];
+                const unique = Array.from(new Map(combined.map(item => [item.url, item])).values());
+                App.State.newsData = unique.sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+
+                // If on news view, re-render
+                if(App.UI.curr === 'news') App.UI.views.news(false);
+                // If on details view, re-render related news
+                if(App.UI.curr === 'detail') App.UI.renderDetailNews();
+            });
         }
     },
 
     // --- GEMINI AI MODULE ---
     Gemini: {
         generate: async (prompt) => {
-            const apiKey = Config.getGeminiKey();
-            const keyParam = apiKey ? `?key=${apiKey}` : `?key=`; 
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent${keyParam}`, {
+                // Now proxied through backend to hide key
+                const response = await fetch('/api/ai', {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    body: JSON.stringify({ prompt: prompt })
                 });
                 
                 if(!response.ok) throw new Error('AI API Error');
@@ -31,7 +47,7 @@ const App = {
                 return data.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis available.";
             } catch (e) {
                 console.error(e);
-                return "Error: Could not generate AI insight. Please check your Gemini API Key in Settings.";
+                return "Error: Could not generate AI insight. Please try again later.";
             }
         },
         analyzeComprehensive: async (ticker, data, indicators, comparisons) => {
@@ -353,7 +369,26 @@ const App = {
             searchBar: () => `<div class="relative mb-6 z-30 group" tabindex="0" onblur="setTimeout(()=>{const e=document.getElementById('search-res');if(e)e.classList.add('hidden')}, 200)"><i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i><input type="text" placeholder="Search (e.g. TSLA)..." class="w-full bg-white border border-gray-200 rounded-xl py-3 pl-10 pr-4 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-black transition shadow-sm" oninput="App.UI.handleSearch(this.value)"><div id="search-res" class="absolute top-14 left-0 w-full bg-white rounded-xl shadow-xl border border-gray-100 hidden overflow-hidden z-50"></div></div>`,
             nav: () => `<nav class="nav-container"><div class="hidden dt:flex items-center gap-3 mb-8 px-2"><div class="w-8 h-8 bg-black text-white rounded flex items-center justify-center font-bold text-lg">F</div><span class="font-bold text-xl tracking-tight">Friday</span></div>${['home','trade','news','profile'].map(p=>`<button onclick="App.UI.router.go('${p}')" class="nav-btn ${App.UI.curr===p?'active':''}"><i class="fa-solid fa-${p==='home'?'house':p==='trade'?'arrow-trend-up':p==='news'?'newspaper':'user'}"></i><span>${p.charAt(0).toUpperCase()+p.slice(1)}</span></button>`).join('')}</nav>`,
             card: (s, q) => { const u = q.change >= 0, c = u ? 'green' : 'red'; return `<div onclick="App.UI.router.go('detail','${s}')" class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer hover:shadow-md transition group"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-xl bg-${c}-50 flex items-center justify-center font-bold text-${c}-600 border border-${c}-100 group-hover:scale-110 transition">${s[0]}</div><div><h3 class="font-bold text-gray-900">${s}</h3><span class="text-xs text-gray-400 font-medium">Stock</span></div></div><div class="flex flex-col items-end gap-1"><div class="flex items-center gap-2 mt-1"><span class="font-bold text-gray-900 text-lg">${Utils.formatCurrency(q.price)}</span><span class="text-xs font-bold px-1.5 py-0.5 rounded bg-${c}-50 text-${c}-600">${u?'+':''}${q.change.toFixed(2)}%</span></div></div></div>`; },
-            news: (n, compact) => compact ? `<div onclick="window.open('${n.url}')" class="p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer flex flex-col h-full"><h4 class="text-xs font-bold leading-tight mb-2 line-clamp-2">${n.title}</h4><div class="mt-auto flex items-center gap-2"><span class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">${n.author}</span><span class="text-[10px] text-gray-400">${dayjs(n.time).fromNow()}</span></div></div>` : `<div onclick="window.open('${n.url}','_blank')" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col h-full"><div class="flex justify-between items-start gap-4 mb-2"><h3 class="font-bold text-sm leading-snug line-clamp-3">${n.title}</h3>${n.img ? `<div class="w-16 h-16 bg-gray-100 rounded-lg bg-cover bg-center shrink-0" style="background-image:url('${n.img}')"></div>` : ''}</div><div class="mt-auto pt-2 flex items-center gap-2 text-[10px] text-gray-400 font-medium border-t border-gray-50"><span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded truncate max-w-[80px]">${n.author}</span><span>${dayjs(n.time).fromNow()}</span></div></div>`,
+            news: (n, compact) => {
+                // Enrich news card with ticker pills
+                let tickersHTML = '';
+                if(n.tickers && n.tickers.length > 0) {
+                    tickersHTML = `<div class="flex flex-wrap gap-2 mt-2">` +
+                        n.tickers.map(t => {
+                            if(t.error) return '';
+                            const u = t.change >= 0;
+                            const color = u ? 'green' : 'red';
+                            return `<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-${color}-50 text-${color}-600 border border-${color}-100 flex items-center gap-1">${t.symbol} ${u?'↑':'↓'} ${Math.abs(t.change).toFixed(1)}%</span>`;
+                        }).join('') +
+                        `</div>`;
+                }
+
+                if(compact) {
+                    return `<div onclick="window.open('${n.url}')" class="p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer flex flex-col h-full"><h4 class="text-xs font-bold leading-tight mb-2 line-clamp-2">${n.title}</h4>${tickersHTML}<div class="mt-auto flex items-center gap-2 pt-2"><span class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">${n.source || 'News'}</span><span class="text-[10px] text-gray-400">${dayjs(n.publishedAt || n.time).fromNow()}</span></div></div>`;
+                } else {
+                    return `<div onclick="window.open('${n.url}','_blank')" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col h-full"><div class="flex justify-between items-start gap-4 mb-2"><h3 class="font-bold text-sm leading-snug line-clamp-3">${n.title}</h3></div>${tickersHTML}<div class="mt-auto pt-2 flex items-center gap-2 text-[10px] text-gray-400 font-medium border-t border-gray-50"><span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded truncate max-w-[100px]">${n.source || 'News'}</span><span>${dayjs(n.publishedAt || n.time).fromNow()}</span></div></div>`;
+                }
+            },
             optRow: (o, p) => { const isCall = o.details.contract_type === 'call', isITM = isCall ? (p > o.details.strike_price) : (p < o.details.strike_price); return `<tr class="opt-row ${isITM ? (isCall ? 'opt-itm-call' : 'opt-itm-put') : 'bg-white'}"><td class="p-3 text-xs font-bold text-gray-900 sticky left-0 bg-white z-10 shadow-sm">${o.details.strike_price}</td><td class="p-3 text-xs text-right font-medium">${(o.last_trade?.price || o.day.close || '-')}</td><td class="p-3 text-xs text-right text-gray-500">${o.last_quote?.bid || '-'}</td><td class="p-3 text-xs text-right text-gray-500">${o.last_quote?.ask || '-'}</td><td class="p-3 text-xs text-right text-gray-500">${Utils.formatNumber(o.day.volume)}</td><td class="p-3 text-xs text-right text-gray-500">${Utils.formatNumber(o.open_interest)}</td></tr>`; }
         },
 
@@ -369,13 +404,30 @@ const App = {
         views: {
             home: async () => {
                 App.UI.curr = 'home';
-                App.UI.app.innerHTML = `${App.UI.comps.nav()}<main class="content-area bg-[#fdfbf7] p-6 fade-in"><div class="max-w-5xl mx-auto"><header class="flex justify-between items-center mb-6 dt:hidden"><div class="flex items-center gap-2"><div class="w-8 h-8 bg-black text-white rounded flex items-center justify-center font-bold">F</div><h1 class="font-bold text-lg">Friday</h1></div><div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-500">${Config.getApiKey().slice(0,2)}</div></header>${App.UI.comps.searchBar()}<div class="mb-8"><div class="flex justify-between items-center mb-4 border-b border-gray-200 pb-2"><h2 class="font-bold text-lg text-gray-800">Your Portfolio</h2><button onclick="App.UI.showAI('portfolio')" class="scout-btn w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-binoculars"></i></button></div><div id="pf-list" class="card-grid"><div class="w-full h-24 skeleton mb-3"></div></div></div><div><h2 class="font-bold text-lg text-gray-800 mb-4 border-b border-gray-200 pb-2">Watchlist</h2><div id="wl-list" class="card-grid"><div class="w-full h-24 skeleton mb-3"></div></div></div></div></main>`;
+                App.UI.app.innerHTML = `${App.UI.comps.nav()}<main class="content-area bg-[#fdfbf7] p-6 fade-in"><div class="max-w-5xl mx-auto"><header class="flex justify-between items-center mb-6 dt:hidden"><div class="flex items-center gap-2"><div class="w-8 h-8 bg-black text-white rounded flex items-center justify-center font-bold">F</div><h1 class="font-bold text-lg">Friday</h1></div><div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-500">U</div></header>${App.UI.comps.searchBar()}<div class="mb-8"><div class="flex justify-between items-center mb-4 border-b border-gray-200 pb-2"><h2 class="font-bold text-lg text-gray-800">Your Portfolio</h2><button onclick="App.UI.showAI('portfolio')" class="scout-btn w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-binoculars"></i></button></div><div id="pf-list" class="card-grid"><div class="w-full h-24 skeleton mb-3"></div></div></div><div><h2 class="font-bold text-lg text-gray-800 mb-4 border-b border-gray-200 pb-2">Watchlist</h2><div id="wl-list" class="card-grid"><div class="w-full h-24 skeleton mb-3"></div></div></div><div class="mt-8"><h2 class="font-bold text-lg text-gray-800 mb-4 border-b border-gray-200 pb-2">Top Movers</h2><div class="grid grid-cols-1 dt:grid-cols-2 gap-4"><div class="bg-white p-4 rounded-xl border border-gray-100"><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">Gainers</h3><div id="mv-gain" class="flex flex-col gap-2"></div></div><div class="bg-white p-4 rounded-xl border border-gray-100"><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">Losers</h3><div id="mv-lose" class="flex flex-col gap-2"></div></div></div></div></div></main>`;
                 
                 const syms = [...new Set([...App.State.portfolio, ...App.State.watchlist])];
-                if (syms.length === 0) { document.getElementById('pf-list').innerHTML = '<div class="text-sm text-gray-400">Empty</div>'; return; }
-                const q = await Promise.all(syms.map(s => Network.endpoints.quote(s)));
-                const rend = (id, l) => document.getElementById(id).innerHTML = l.length ? l.map(s => App.UI.comps.card(s, q[syms.indexOf(s)]?.results?.[0] ? { price: q[syms.indexOf(s)].results[0].c, change: ((q[syms.indexOf(s)].results[0].c - q[syms.indexOf(s)].results[0].o) / q[syms.indexOf(s)].results[0].o) * 100 } : { price: 0, change: 0 })).join('') : '<div class="p-6 text-center text-sm text-gray-400 border-2 border-dashed border-gray-200 rounded-xl w-full">Empty</div>';
-                rend('pf-list', App.State.portfolio); rend('wl-list', App.State.watchlist);
+
+                // Fetch Portfolio Data
+                if (syms.length > 0) {
+                    const q = await Promise.all(syms.map(s => Network.endpoints.quote(s)));
+                    const rend = (id, l) => document.getElementById(id).innerHTML = l.length ? l.map(s => {
+                         const raw = q[syms.indexOf(s)]?.results?.[0];
+                         const price = raw ? raw.c : 0;
+                         const change = raw ? ((raw.c - raw.o) / raw.o) * 100 : 0;
+                         return App.UI.comps.card(s, { price, change });
+                    }).join('') : '<div class="p-6 text-center text-sm text-gray-400 border-2 border-dashed border-gray-200 rounded-xl w-full">Empty</div>';
+                    rend('pf-list', App.State.portfolio); rend('wl-list', App.State.watchlist);
+                } else {
+                     document.getElementById('pf-list').innerHTML = '<div class="text-sm text-gray-400">Empty</div>';
+                     document.getElementById('wl-list').innerHTML = '<div class="text-sm text-gray-400">Empty</div>';
+                }
+
+                // Fetch Movers
+                const movers = await Network.endpoints.movers();
+                const renderMover = (m) => `<div onclick="App.UI.router.go('detail','${m.ticker}')" class="flex justify-between items-center cursor-pointer hover:bg-gray-50 p-2 rounded transition"><span class="font-bold text-sm">${m.ticker}</span><span class="text-xs font-bold px-1.5 py-0.5 rounded bg-${m.change>=0?'green':'red'}-50 text-${m.change>=0?'green':'red'}-600">${m.change>=0?'+':''}${m.change.toFixed(2)}%</span></div>`;
+                if(movers.gainers) document.getElementById('mv-gain').innerHTML = movers.gainers.slice(0,5).map(renderMover).join('');
+                if(movers.losers) document.getElementById('mv-lose').innerHTML = movers.losers.slice(0,5).map(renderMover).join('');
             },
             detail: async (s) => {
                 App.Charts.cleanup(); App.UI.curr = 'detail'; App.State.activeSymbol = s; App.State.optionsType = 'call'; App.State.detailNewsPage = 1;
@@ -391,14 +443,17 @@ const App = {
                 ['det-c', 'det-c-m'].forEach(x => { const e = document.getElementById(x); if (e) { e.innerText = `${change>=0?'+':''}${change.toFixed(2)}%`; e.style.color = c; } });
                 if(res) { document.getElementById('det-o').innerText = res.o; document.getElementById('det-h').innerText = res.h; }
                 
-                App.State.chartData = b; App.State.newsData = n;
+                App.State.chartData = b;
+                // Filter backend news for this symbol if needed (simple contains check)
+                App.State.newsData = n.filter(x => (x.title + (x.tickers?.map(t=>t.symbol).join(' ')||'')).toUpperCase().includes(s));
+
                 App.Charts.initMain('main-chart', b);
                 App.UI.renderDetailNews();
 
                 Network.endpoints.options(s).then(opts => { 
                     if(opts.error) {
                         App.State.optionsData = [];
-                        Utils.toast('Options API Error (Check Tier)', 'error');
+                        Utils.toast('Options API Error', 'error');
                     } else {
                         App.State.optionsData = opts; 
                     }
@@ -407,23 +462,28 @@ const App = {
             },
             news: async (r) => {
                 App.UI.curr = 'news';
-                App.UI.app.innerHTML = `${App.UI.comps.nav()}<main class="content-area bg-[#fdfbf7] p-6 fade-in"><div class="max-w-4xl mx-auto"><div class="flex justify-between items-center mb-6"><h1 class="font-bold text-2xl text-gray-900">Market News</h1><div class="bg-white border border-gray-200 rounded-lg p-1 flex"><button onclick="App.State.newsFilter='market';App.State.newsPage=1;App.UI.views.news(true)" class="${App.State.newsFilter === 'market' ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50'} px-4 py-1.5 rounded-md text-xs font-bold transition">Market</button><button onclick="App.State.newsFilter='my';App.State.newsPage=1;App.UI.views.news(true)" class="${App.State.newsFilter === 'my' ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50'} px-4 py-1.5 rounded-md text-xs font-bold transition">My Stocks</button></div></div>${App.UI.comps.searchBar()}<div id="news-grid" class="news-grid"><div class="w-full h-24 skeleton mb-3"></div></div><div id="news-pg" class="flex justify-center gap-4 mt-8"></div></div></main>`;
+                App.UI.app.innerHTML = `${App.UI.comps.nav()}<main class="content-area bg-[#fdfbf7] p-6 fade-in"><div class="max-w-4xl mx-auto"><div class="flex justify-between items-center mb-6"><h1 class="font-bold text-2xl text-gray-900">Live News</h1><div class="bg-white border border-gray-200 rounded-lg p-1 flex"><button onclick="App.State.newsFilter='market';App.State.newsPage=1;App.UI.views.news(true)" class="${App.State.newsFilter === 'market' ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50'} px-4 py-1.5 rounded-md text-xs font-bold transition">All</button><button onclick="App.State.newsFilter='my';App.State.newsPage=1;App.UI.views.news(true)" class="${App.State.newsFilter === 'my' ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50'} px-4 py-1.5 rounded-md text-xs font-bold transition">My Stocks</button></div></div>${App.UI.comps.searchBar()}<div id="news-grid" class="news-grid"><div class="w-full h-24 skeleton mb-3"></div></div><div id="news-pg" class="flex justify-center gap-4 mt-8"></div></div></main>`;
+
                 if (r || App.State.newsData.length === 0) {
-                    if (App.State.newsFilter === 'market') App.State.newsData = await Network.endpoints.news('market', 40);
-                    else {
-                        const s = [...new Set([...App.State.portfolio, ...App.State.watchlist])].slice(0, 3);
-                        if (s.length === 0) { document.getElementById('news-grid').innerHTML = '<div class="col-span-full text-center text-gray-400">Add stocks first</div>'; return; }
-                        const res = await Promise.all(s.map(x => Network.endpoints.news(x, 5)));
-                        App.State.newsData = res.flat().sort((a, b) => new Date(b.time) - new Date(a.time));
-                    }
+                    App.State.newsData = await Network.endpoints.news('market');
                 }
-                const pg = Utils.paginate(App.State.newsData, App.State.newsPage, 12);
+
+                let displayData = App.State.newsData;
+                if (App.State.newsFilter === 'my') {
+                     const s = [...new Set([...App.State.portfolio, ...App.State.watchlist])];
+                     displayData = displayData.filter(n => {
+                         // Check if news contains any of my stocks (symbol or ticker in title)
+                         return s.some(ticker => (n.title || '').includes(ticker) || (n.tickers || []).some(t => t.symbol === ticker));
+                     });
+                }
+
+                const pg = Utils.paginate(displayData, App.State.newsPage, 12);
                 const grid = document.getElementById('news-grid');
                 if(grid) grid.innerHTML = pg.data.length ? pg.data.map(x => App.UI.comps.news(x)).join('') : '<div class="col-span-full text-center text-gray-400">No news found</div>';
                 document.getElementById('news-pg').innerHTML = `<button onclick="App.State.newsPage--;App.UI.views.news()" ${!pg.meta.hasPrev ? 'disabled' : ''} class="w-10 h-10 border rounded bg-white"><i class="fa-solid fa-chevron-left"></i></button><span class="flex items-center text-sm font-bold text-gray-400">Pg ${pg.meta.current}</span><button onclick="App.State.newsPage++;App.UI.views.news()" ${!pg.meta.hasNext ? 'disabled' : ''} class="w-10 h-10 border rounded bg-white"><i class="fa-solid fa-chevron-right"></i></button>`;
             },
             trade: (s) => App.UI.app.innerHTML = `${App.UI.comps.nav()}<main class="content-area bg-[#fdfbf7] p-6 fade-in"><div class="max-w-md mx-auto bg-white p-6 rounded-2xl shadow border mt-10"><h1 class="font-bold text-xl mb-4">Trade ${s}</h1>${App.UI.comps.searchBar()}<button onclick="Utils.toast('Order Placed!','success')" class="w-full bg-black text-white py-3 rounded-xl font-bold">Buy ${s}</button></div></main>`,
-            profile: () => App.UI.app.innerHTML = `${App.UI.comps.nav()}<main class="content-area bg-[#fdfbf7] p-6 fade-in"><div class="max-w-md"><h1 class="font-bold text-2xl mb-4">Settings</h1>${App.UI.comps.searchBar()}<label class="block text-xs font-bold text-gray-500 mb-1">Polygon API Key</label><input id="k-in" value="${Config.getApiKey()}" class="w-full border p-2 rounded mb-4"><button onclick="Config.setApiKey(document.getElementById('k-in').value, 'polygon')" class="bg-black text-white px-4 py-2 rounded font-bold text-sm mb-6">Save</button><label class="block text-xs font-bold text-gray-500 mb-1">Gemini AI API Key</label><input id="k-in-ai" value="${Config.getGeminiKey()}" class="w-full border p-2 rounded mb-4" placeholder="AI Key"><button onclick="Config.setApiKey(document.getElementById('k-in-ai').value, 'gemini')" class="bg-ai-main text-white px-4 py-2 rounded font-bold text-sm">Save AI Key</button></div></main>`
+            profile: () => App.UI.app.innerHTML = `${App.UI.comps.nav()}<main class="content-area bg-[#fdfbf7] p-6 fade-in"><div class="max-w-md"><h1 class="font-bold text-2xl mb-4">Settings</h1>${App.UI.comps.searchBar()}<p class="text-gray-500 text-sm">Server Version: 13.0 (Secure)</p><p class="text-xs text-gray-400 mt-2">Keys are now managed securely by the server administrator.</p></div></main>`
         },
         router: { go: (v, p) => App.UI.views[v] ? App.UI.views[v](p) : null },
         

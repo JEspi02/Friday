@@ -2,28 +2,22 @@
  * Configuration & Environment Variables
  */
 const Config = {
-    defaultKey: '3GynnSpSjIYUSQ9dnYEAdXLpVV0ETpc0', 
-    geminiKey: "", // User can override in settings
+    // Keys are now handled on the backend (server.js .env)
+    // We only keep storage keys for local user preferences
     
     storageKeys: { 
-        apiKey: 'friday_api_key', 
-        geminiKey: 'friday_gemini_key',
         portfolio: 'friday_pf', 
         watchlist: 'friday_wl', 
         lastAdd: 'friday_last_add' 
     },
 
-    getApiKey: () => localStorage.getItem('friday_api_key') || Config.defaultKey,
-    getGeminiKey: () => localStorage.getItem('friday_gemini_key') || Config.geminiKey,
+    // No longer need getters for API keys
+    getApiKey: () => null,
+    getGeminiKey: () => null,
     
+    // Setting keys is deprecated/removed in this version since we use the backend
     setApiKey: (k, type = 'polygon') => { 
-        if(!k) return;
-        const cleanKey = k.trim();
-        if(cleanKey.length < 5) { Utils.toast('Invalid Key', 'error'); return; }
-        const storeKey = type === 'gemini' ? 'friday_gemini_key' : 'friday_api_key';
-        localStorage.setItem(storeKey, cleanKey); 
-        Utils.toast(`${type === 'gemini' ? 'Gemini' : 'Polygon'} Key Saved!`, 'success');
-        if(type !== 'gemini') setTimeout(() => location.reload(), 1000); 
+        Utils.toast('API Keys are managed by the server administrator.', 'info');
     }
 };
 

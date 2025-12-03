@@ -1,11 +1,12 @@
 /**
  * API & Network Layer
  * Handles fetching, caching, and rate limiting
+ * Refactored to point to local Backend API
  */
 
 const Utils = {
     debounce: (func, wait) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); }; },
-    formatCurrency: (val) => `$${val.toFixed(2)}`,
+    formatCurrency: (val) => `$${(val || 0).toFixed(2)}`,
     formatNumber: (num) => num ? (num >= 1e6 ? (num/1e6).toFixed(1) + 'M' : (num >= 1e3 ? (num/1e3).toFixed(1) + 'K' : num)) : '-',
     safeParse: (key, fallback) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : fallback; } catch(e) { return fallback; } },
     toast: (msg, type = 'info') => { 
@@ -26,7 +27,8 @@ const Utils = {
 window.Utils = Utils;
 
 const Network = {
-    baseUrl: 'https://api.polygon.io',
+    // Points to local backend now
+    baseUrl: '/api',
     queue: [],
     isProcessing: false,
     cache: new Map(),
@@ -54,26 +56,9 @@ const Network = {
         Network.isProcessing = true;
         
         const item = Network.queue.shift();
-        const apiKey = Config.getApiKey();
         
         try {
-            const res = await fetch(`${Network.baseUrl}${item.url}&apiKey=${apiKey}`);
-            
-            if (res.status === 429) {
-                if (item.retries < 3) {
-                    item.retries++;
-                    Network.queue.unshift(item); 
-                    setTimeout(() => {
-                        Network.isProcessing = false;
-                        Network.processQueue();
-                    }, 5000 * item.retries);
-                } else {
-                    Utils.toast('Rate limit exceeded.', 'error');
-                    item.reject('Rate Limited');
-                    Network.isProcessing = false;
-                }
-                return;
-            }
+            const res = await fetch(`${Network.baseUrl}${item.url}`);
             
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
@@ -102,28 +87,25 @@ const Network = {
     },
 
     endpoints: {
-        quote: (s) => Network.swr(`q-${s}`, `/v2/aggs/ticker/${s}/prev?adjusted=true`, 5),
+        quote: (s) => Network.swr(`q-${s}`, `/quote/${s}`, 1),
         bars: (s, r) => {
-            let m = 1, t = 'day', l = 1000;
-            if (r === '1m') { m = 1; t = 'minute'; }
-            if (r === '5m') { m = 5; t = 'minute'; }
-            if (r === '15m') { m = 15; t = 'minute'; }
-            if (r === '1h') { m = 1; t = 'hour'; }
-            if (r === '4h') { m = 4; t = 'hour'; }
-            return Network.swr(`b-${s}-${r}`, `/v2/aggs/ticker/${s}/range/${m}/${t}/${Date.now()-31536000000}/${Date.now()}?adjusted=true&sort=desc&limit=${l}`, 15)
+            return Network.swr(`b-${s}-${r}`, `/chart/${s}?interval=${r}`, 5)
                 .then(d => d.results ? d.results.map(b => ({ time: b.t / 1000, open: b.o, high: b.h, low: b.l, close: b.c })).reverse() : []);
         },
+        // News now fetches enriched articles from backend
         news: (s, l=10) => {
-            const q = (s && s !== 'market') ? `ticker=${s}&` : '';
-            return Network.swr(`n-${s || 'mkt'}-${l}`, `/v2/reference/news?${q}limit=${l}`, 30)
-                .then(d => (d.results || []).map(n => ({ title: n.title, author: n.author, time: n.published_utc, url: n.article_url, img: n.image_url })));
+            // If specific ticker, filter locally or ask backend (backend implementation is global news for now)
+            // For now, we fetch global news and filter client side if needed, or just return global
+            return Network.swr(`news-feed`, `/news`, 1)
+                .then(d => d || []);
         },
-        options: (s) => Network.swr(`opt-${s}`, `/v3/snapshot/options/${s}?limit=250&sort=expiration_date&order=asc`, 15)
+        movers: () => Network.swr('movers', '/movers', 5),
+        options: (s) => Network.swr(`opt-${s}`, `/options/${s}`, 15)
             .then(d => {
                 if(d.error) return { error: true, code: d.details };
                 return d.results || [];
             }),
-        search: (q) => Network.addToQueue(`/v3/reference/tickers?search=${q}&active=true&sort=ticker&order=asc&limit=10`).then(d => d.results || [])
+        search: (q) => Network.addToQueue(`/search?q=${q}`)
     }
 };
 
