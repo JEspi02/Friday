@@ -15,6 +15,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <script>dayjs.extend(window.dayjs_plugin_relativeTime);</script>
 
     <!-- Tailwind Config -->
@@ -147,21 +148,7 @@
         </div>
     </div>
 
-    <!-- --- 3. JavaScript Modules (Order Matters) --- -->
-    <script src="js/config.js"></script> <!-- 1. Environment/Keys -->
-    <script src="js/api.js"></script>    <!-- 2. Network Layer -->
-    <script src="js/app.js"></script>    <!-- 3. Core/UI/Charts -->
-
-    <script>
-        // Init
-        window.onload = () => { 
-            if(window.App && window.App.State && window.App.Core) {
-                App.State.init(); 
-                App.Core.init(); 
-            } else {
-                console.error("Initialization Failed: Modules not loaded.");
-            }
-        };
-    </script>
+    <!-- --- 3. JavaScript Modules (ESM) --- -->
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
