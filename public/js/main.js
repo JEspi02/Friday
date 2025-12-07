@@ -8,13 +8,21 @@ import Network from './modules/network.js';
 import UI from './modules/ui.js';
 
 const Router = {
-    go: (view, param) => {
+    // UPDATED: Now handles "view/param" strings correctly
+    go: (routeString) => {
+        if (!routeString) return;
+        
+        // Split "detail/AAPL" into ["detail", "AAPL"]
+        const parts = routeString.split('/');
+        const view = parts[0];
+        const param = parts[1] || null;
+
         UI.currentView = view;
         window.scrollTo(0, 0);
 
         if (view === 'home') {
             UI.renderHome();
-        } else if (view === 'detail') {
+        } else if (view === 'detail' && param) {
             UI.renderDetail(param);
         } else if (view === 'news') {
             UI.renderNews();
@@ -37,12 +45,14 @@ window.onload = () => {
     try {
         const socket = io();
         socket.on('news-update', (articles) => {
-            UI.toast(`⚡ ${articles.length} New Headlines`, 'ai');
-            const newData = State.setNews(articles);
+            if(articles && articles.length > 0) {
+                UI.toast(`⚡ ${articles.length} New Headlines`, 'ai');
+                const newData = State.setNews(articles);
 
-            // Re-render if valid
-            if (UI.currentView === 'news') UI.renderNews();
-            if (UI.currentView === 'detail') UI.renderDetail(State.activeSymbol); // Refresh related news
+                // Re-render if valid
+                if (UI.currentView === 'news') UI.renderNews();
+                if (UI.currentView === 'detail') UI.renderDetail(State.activeSymbol); // Refresh related news
+            }
         });
     } catch(e) {
         console.warn('Socket.io failed to connect');

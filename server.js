@@ -7,14 +7,12 @@ const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
 const path = require('path');
 
-// Suppress Yahoo Finance Notice (if the method exists on the instance)
+// Suppress Yahoo Finance Notice
 if (yahooFinance.suppressNotices) {
     yahooFinance.suppressNotices(['yahooSurvey']);
 }
 
 // Initialize Realtime News API
-// Note: Assuming 'realtime-newsapi' works as described in the prompt.
-// If it fails, we will need to wrap this in a try-catch or mock it.
 let newsApi;
 try {
     newsApi = require('realtime-newsapi')();
@@ -33,6 +31,30 @@ app.use(express.json());
 
 // --- CACHE & STATE ---
 let enrichedArticles = [];
+
+// Function to pre-fill news using Yahoo Finance
+const fetchInitialNews = async () => {
+    try {
+        console.log("Fetching initial market news...");
+        // Fetch news for SPY (Market Proxy) to populate the feed
+        const result = await yahooFinance.search('SPY', { newsCount: 20 });
+        if (result.news) {
+            enrichedArticles = result.news.map(n => ({
+                title: n.title,
+                url: n.link,
+                source: n.publisher,
+                publishedAt: new Date(n.providerPublishTime * 1000).toISOString(),
+                tickers: n.relatedTickers ? n.relatedTickers.map(t => ({ symbol: t, change: 0 })) : []
+            }));
+            console.log(`Loaded ${enrichedArticles.length} initial news items.`);
+        }
+    } catch (e) {
+        console.error("Failed to load initial news:", e.message);
+    }
+};
+
+// Call immediately on start
+fetchInitialNews();
 
 // --- REALTIME NEWS LOGIC ---
 if (newsApi) {
@@ -107,9 +129,10 @@ app.get('/api/quote/:ticker', async (req, res) => {
 // 6. Top Movers (Gainers/Losers)
 app.get('/api/movers', async (req, res) => {
     try {
+        const queryOptions = { count: 10, region: 'US', lang: 'en-US' };
         const [gainers, losers] = await Promise.all([
-            yahooFinance.screener({ scrIds: 'day_gainers', count: 10 }),
-            yahooFinance.screener({ scrIds: 'day_losers', count: 10 })
+             yahooFinance.screener({ scrIds: 'day_gainers', ...queryOptions }),
+             yahooFinance.screener({ scrIds: 'day_losers', ...queryOptions })
         ]);
 
         // Normalize data
@@ -119,7 +142,10 @@ app.get('/api/movers', async (req, res) => {
             change: i.regularMarketChangePercent
         }));
 
-        res.json({ gainers: format(gainers.quotes), losers: format(losers.quotes) });
+        res.json({ 
+            gainers: format(gainers.quotes || []), 
+            losers: format(losers.quotes || []) 
+        });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -131,10 +157,12 @@ app.get('/api/search', async (req, res) => {
         const q = req.query.q;
         if(!q) return res.json([]);
         const result = await yahooFinance.search(q);
-        const docs = result.quotes.filter(q => q.isYahooFinance).map(q => ({
-            ticker: q.symbol,
-            name: q.shortname || q.longname || q.symbol
-        }));
+        const docs = result.quotes
+            .filter(q => q.isYahooFinance && (q.quoteType === 'EQUITY' || q.quoteType === 'ETF'))
+            .map(q => ({
+                ticker: q.symbol,
+                name: q.shortname || q.longname || q.symbol
+            }));
         res.json(docs);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -143,7 +171,7 @@ app.get('/api/search', async (req, res) => {
 
 // 2. Bars/Charts (Yahoo Finance)
 app.get('/api/chart/:ticker', async (req, res) => {
-    const { interval = '1d', range = '1mo' } = req.query; // Map frontend '1D', '1m' to Yahoo params
+    const { interval = '1d', range = '1mo' } = req.query; 
 
     // Simple mapper for timeframe
     let yInterval = '1d';
@@ -153,7 +181,7 @@ app.get('/api/chart/:ticker', async (req, res) => {
     if (interval === '5m') { yInterval = '5m'; yRange = '1d'; }
     if (interval === '15m') { yInterval = '15m'; yRange = '5d'; }
     if (interval === '1h') { yInterval = '60m'; yRange = '1mo'; }
-    if (interval === '4h') { yInterval = '60m'; yRange = '3mo'; } // Yahoo doesn't support 4h well, approx with 1h
+    if (interval === '4h') { yInterval = '60m'; yRange = '3mo'; } 
     if (interval === '1D') { yInterval = '1d'; yRange = '1y'; }
 
     try {
@@ -177,9 +205,7 @@ app.get('/api/chart/:ticker', async (req, res) => {
 app.get('/api/options/:ticker', async (req, res) => {
     try {
         const result = await yahooFinance.options(req.params.ticker, { count: 100 });
-        // We need to flatten the chain for the frontend
-        // Frontend expects: list of objects with { details: { strike_price, expiration_date, contract_type }, ... }
-
+        
         // Use the first available expiration for now
         const expirationDate = result.expirationDates[0];
         const options = result.options[0]; // Calls and Puts for first date
