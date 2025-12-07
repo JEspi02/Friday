@@ -122,7 +122,8 @@ app.get('/api/quote/:ticker', async (req, res) => {
         };
         res.json(data);
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error(`Quote failed for ${req.params.ticker}:`, e.message);
+        res.json({ results: [{ c: 0, o: 0, h: 0, l: 0, pc: 0, t: Date.now() }] });
     }
 });
 
@@ -147,7 +148,8 @@ app.get('/api/movers', async (req, res) => {
             losers: format(losers.quotes || []) 
         });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error("Movers failed:", e.message);
+        res.json({ gainers: [], losers: [] });
     }
 });
 
@@ -165,7 +167,8 @@ app.get('/api/search', async (req, res) => {
             }));
         res.json(docs);
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error("Search failed:", e.message);
+        res.json([]);
     }
 });
 
@@ -197,7 +200,8 @@ app.get('/api/chart/:ticker', async (req, res) => {
 
         res.json({ results: bars });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error(`Chart failed for ${req.params.ticker}:`, e.message);
+        res.json({ results: [] });
     }
 });
 
@@ -242,7 +246,8 @@ app.get('/api/options/:ticker', async (req, res) => {
 
         res.json({ results: allOpts });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error(`Options failed for ${req.params.ticker}:`, e.message);
+        res.json({ results: [] });
     }
 });
 

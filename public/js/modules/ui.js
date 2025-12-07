@@ -118,6 +118,20 @@ const UI = {
         content.innerHTML = marked.parse(result);
     },
 
+    updateDetailNews: (ticker) => {
+        const container = document.getElementById('det-news-grid');
+        if (!container) return; // Guard clause if user navigated away
+
+        const related = State.newsData.filter(n =>
+            (n.title && n.title.includes(ticker)) ||
+            (n.tickers && n.tickers.some(t => t.symbol === ticker))
+        );
+
+        container.innerHTML = related.length
+            ? related.slice(0, 4).map(n => UI.comps.news(n, true)).join('')
+            : '<div class="col-span-full text-center text-xs text-gray-400">No recent news</div>';
+    },
+
     renderHome: async () => {
         const html = `
             ${UI.comps.nav()}

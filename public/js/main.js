@@ -50,8 +50,13 @@ window.onload = () => {
                 const newData = State.setNews(articles);
 
                 // Re-render if valid
-                if (UI.currentView === 'news') UI.renderNews();
-                if (UI.currentView === 'detail') UI.renderDetail(State.activeSymbol); // Refresh related news
+                if (UI.currentView === 'news') {
+                    UI.renderNews();
+                } else if (UI.currentView === 'detail') {
+                    // DO NOT call renderDetail() here. It destroys the chart.
+                    // Instead, call a specialized method to just update the news column.
+                    UI.updateDetailNews(State.activeSymbol);
+                }
             }
         });
     } catch(e) {

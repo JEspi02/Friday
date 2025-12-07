@@ -59,7 +59,21 @@ const Network = {
     getBars: (ticker, timeframe) => {
         // Timeframe mapping matches server expectation or passed directly
         return Network.swr(`b-${ticker}-${timeframe}`, `/chart/${ticker}?interval=${timeframe}`, 5)
-            .then(d => d.results ? d.results.map(b => ({ time: b.t / 1000, open: b.o, high: b.h, low: b.l, close: b.c })).reverse() : []);
+            .then(d => {
+                // SAFETY CHECK: Ensure d exists and has results
+                if (!d || !d.results) return [];
+                return d.results.map(b => ({
+                    time: b.t / 1000,
+                    open: b.o,
+                    high: b.h,
+                    low: b.l,
+                    close: b.c
+                })).reverse();
+            })
+            .catch(err => {
+                console.warn("Chart data error:", err);
+                return [];
+            });
     },
 
     getNews: () => Network.swr('news-feed', '/news', 1).then(d => d || []),
@@ -68,9 +82,10 @@ const Network = {
 
     getOptions: (ticker) => Network.swr(`opt-${ticker}`, `/options/${ticker}`, 15)
         .then(d => {
-            if(d.error) return { error: true, code: d.details };
-            return d.results || [];
-        }),
+            // SAFETY CHECK: Always return an array. If d.results exists, use it; otherwise empty array.
+            return (d && d.results) ? d.results : [];
+        })
+        .catch(() => []), // Return empty array on crash
 
     search: async (query) => {
         if(!query) return [];
