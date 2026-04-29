@@ -1,39 +1,58 @@
 import os
-import json
-from datetime import datetime, timezone
-from massive import Massive
+from datetime import datetime, timedelta
+from massive import RESTClient
+from dotenv import load_dotenv
 
-# In a real setup, we would read the API key from environment, e.g. os.getenv("MASSIVE_API_KEY")
-# Initialize Massive SDK client
+# 1. Call load_dotenv() to read the .env file
+load_dotenv()
+
+# 2. Retrieve the key and initialize the correct RESTClient
 try:
-    client = Massive()
+    api_key = os.getenv("MASSIVE_API_KEY")
+    client = RESTClient(api_key=api_key)
 except Exception as e:
-    print(f"Failed to initialize Massive SDK: {e}")
+    print(f"Failed to initialize Massive RESTClient: {e}")
     client = None
 
 def fetch_candlesticks(ticker: str, interval: str):
     """
-    Fetch historical bars using Massive.
-    Gracefully fallback to empty array on failure.
+    Fetch historical bars using Massive's list_aggs method.
+    Dynamically maps frontend intervals to Massive timespans and adjusts the lookback window.
     """
     if not client:
         return {"results": []}
 
-    # Map frontend interval to Massive interval if needed.
-    # Frontend passes: 1m, 5m, 15m, 1h, 4h, 1D
-    # Massive expects things like: '1m', '5m', '1d', etc.
-    try:
-        # Example using the massive client (Assuming standard financial API structure)
-        # We wrap in try-except to strictly validate and return safe default
-        response = client.stocks.get_bars(symbol=ticker, time_frame=interval)
+    # Map frontend interval -> (multiplier, timespan, days_back_to_fetch)
+    interval_map = {
+        "1m": (1, "minute", 2),     # 2 days of 1-minute data
+        "5m": (5, "minute", 5),     # 5 days of 5-minute data
+        "15m": (15, "minute", 10),  # 10 days of 15-minute data
+        "1h": (1, "hour", 30),      # 30 days of 1-hour data
+        "4h": (4, "hour", 60),      # 60 days of 4-hour data
+        "1D": (1, "day", 365)       # 1 year of daily data
+    }
 
-        # Translate to frontend expected format
-        # { time: timestamp, open: float, high: float, low: float, close: float }
+    # Default to 1D if the interval is somehow unrecognized
+    multiplier, timespan, days_back = interval_map.get(interval, (1, "day", 30))
+
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days_back)
+        
+        response = client.list_aggs(
+            ticker=ticker,
+            multiplier=multiplier,
+            timespan=timespan, 
+            from_=start_date.strftime('%Y-%m-%d'),
+            to=end_date.strftime('%Y-%m-%d'),
+            limit=50000
+        )
+
         results = []
-        if response and hasattr(response, 'data') and response.data:
-            for bar in response.data:
+        if response:
+            for bar in response:
                 results.append({
-                    "t": int(bar.timestamp.timestamp() * 1000) if hasattr(bar.timestamp, 'timestamp') else bar.timestamp,
+                    "t": bar.timestamp,
                     "o": bar.open,
                     "h": bar.high,
                     "l": bar.low,
@@ -41,31 +60,30 @@ def fetch_candlesticks(ticker: str, interval: str):
                 })
         return {"results": results}
     except Exception as e:
-        print(f"Error fetching candlesticks for {ticker}: {e}")
+        print(f"Error fetching candlesticks for {ticker} ({interval}): {e}")
         return {"results": []}
-
+    
 def fetch_quote(ticker: str):
     """
-    Fetch real-time quote.
-    Gracefully fallback on failure.
+    Fetch the most recent daily quote data using get_previous_close_agg.
     """
     if not client:
         return {"results": [{"c": 0, "o": 0, "h": 0, "l": 0, "pc": 0, "t": int(datetime.now().timestamp() * 1000)}]}
 
     try:
-        response = client.stocks.get_quote(symbol=ticker)
+        # Retrieve the most recent daily aggregate data for the quote
+        prev_close = client.get_previous_close_agg(ticker)
 
-        # Format for frontend expectation
-        # { results: [{ c: quote.regularMarketPrice, ... }] }
-        if response and hasattr(response, 'price'):
+        if prev_close and len(prev_close) > 0:
+            agg = prev_close[0]
             return {
                 "results": [{
-                    "c": response.price,
-                    "o": getattr(response, 'open', 0),
-                    "h": getattr(response, 'high', 0),
-                    "l": getattr(response, 'low', 0),
-                    "pc": getattr(response, 'previous_close', 0),
-                    "t": int(getattr(response, 'timestamp', datetime.now()).timestamp() * 1000)
+                    "c": agg.close,
+                    "o": agg.open,
+                    "h": agg.high,
+                    "l": agg.low,
+                    "pc": agg.close, 
+                    "t": agg.timestamp
                 }]
             }
 
@@ -76,31 +94,42 @@ def fetch_quote(ticker: str):
 
 def fetch_options(ticker: str):
     """
-    Fetch option chains.
-    Gracefully fallback on failure.
+    Fetch option chains (simplified fallback for now).
+    """
+    return {"results": []}
+
+def fetch_movers():
+    """
+    Fetch live top gainers and losers from the Massive API.
     """
     if not client:
-        return {"results": []}
+        return {"gainers": [], "losers": []}
 
     try:
-        # Pseudo-code for Massive SDK option chains
-        response = client.options.get_chains(symbol=ticker)
+        # Fetch live snapshot data for US stocks
+        gainers_resp = client.get_snapshot_direction("gainers", "us", "stocks")
+        losers_resp = client.get_snapshot_direction("losers", "us", "stocks")
 
-        results = []
-        if response and hasattr(response, 'data'):
-            for opt in response.data:
-                results.append({
-                    "details": {
-                        "strike_price": opt.strike,
-                        "expiration_date": opt.expiration,
-                        "contract_type": opt.type
-                    },
-                    "last_trade": { "price": getattr(opt, 'last_price', 0) },
-                    "last_quote": { "bid": getattr(opt, 'bid', 0), "ask": getattr(opt, 'ask', 0) },
-                    "day": { "close": getattr(opt, 'last_price', 0), "volume": getattr(opt, 'volume', 0) },
-                    "open_interest": getattr(opt, 'open_interest', 0)
+        # Parse the top 5 results and format them for our frontend
+        gainers = []
+        if gainers_resp:
+            for g in gainers_resp[:5]:
+                gainers.append({
+                    "ticker": g.ticker, 
+                    "price": getattr(g.day, 'close', 0) if g.day else 0, 
+                    "change": getattr(g, 'todays_change_perc', 0)
                 })
-        return {"results": results}
+
+        losers = []
+        if losers_resp:
+            for l in losers_resp[:5]:
+                losers.append({
+                    "ticker": l.ticker, 
+                    "price": getattr(l.day, 'close', 0) if l.day else 0, 
+                    "change": getattr(l, 'todays_change_perc', 0)
+                })
+
+        return {"gainers": gainers, "losers": losers}
     except Exception as e:
-        print(f"Error fetching options for {ticker}: {e}")
-        return {"results": []}
+        print(f"Error fetching live movers: {e}")
+        return {"gainers": [], "losers": []}

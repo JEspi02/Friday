@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts';
+import { createChart, CandlestickSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts';
 import type { Bar } from '../types';
 
 export const useChart = (data: Bar[]) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
-    const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+    // Changed strict typing to any to prevent generic mismatch errors in v5
+    const seriesRef = useRef<ISeriesApi<any> | null>(null);
 
     useEffect(() => {
         if (!chartContainerRef.current) return;
@@ -28,7 +29,8 @@ export const useChart = (data: Bar[]) => {
             width: chartContainerRef.current.clientWidth
         });
 
-        const series = (chart as any).addCandlestickSeries({
+        // Use the new v5.0 API syntax
+        const series = chart.addSeries(CandlestickSeries, {
             upColor: '#22c55e',
             downColor: '#ef4444',
             borderVisible: false,
@@ -61,7 +63,7 @@ export const useChart = (data: Bar[]) => {
 
     useEffect(() => {
         if (seriesRef.current && data.length > 0) {
-            // Transform data ensuring strict Bar properties expected by lightweight-charts (whitespace/types)
+            // Transform data ensuring strict Bar properties expected by lightweight-charts
             seriesRef.current.setData(data.map(d => ({
                  time: d.time as any,
                  open: d.open,

@@ -31,14 +31,14 @@ export default defineConfig({
       }
     })
   ],
-  server: {
+server: {
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true
       },
       '/socket.io': {
-        target: 'http://backend:8000',
+        target: 'http://127.0.0.1:8000',
         ws: true
       }
     }

@@ -2,9 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import socketio
 import asyncio
+from typing import Optional
 from pydantic import BaseModel
+from services.ai_service import scout
 
-from services.massive_data import fetch_candlesticks, fetch_quote, fetch_options
+from services.massive_data import fetch_candlesticks, fetch_quote, fetch_options, fetch_movers
 from services.news_service import start_news_stream
 from core.mcp_client import mcp_client
 from core.database import get_portfolio, save_portfolio, get_watchlist, save_watchlist
@@ -18,6 +20,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class AIRequest(BaseModel):
+    prompt: str
+    provider: str
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model_name: str = "lms-default"
+
+@app.post("/api/ai/analyze")
+async def analyze_market(req: AIRequest):
+    scout.initialize_client(
+        provider=req.provider, 
+        api_key=req.api_key, 
+        base_url=req.base_url
+    )
+    analysis = await scout.get_analysis(req.prompt, req.model_name)
+    return {"analysis": analysis}
 
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
@@ -73,8 +92,8 @@ async def update_watchlist(user_id: str, symbols: list[str]):
 
 @app.get("/api/movers")
 async def get_movers():
-    # Graceful fallback, would normally hit massive API for screeners
-    return {"gainers": [{"ticker": "NVDA", "change": 5.4}], "losers": [{"ticker": "TSLA", "change": -2.1}]}
+    # Now hitting the live Massive API!
+    return fetch_movers()
 
 @sio.event
 async def connect(sid, environ):
