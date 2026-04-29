@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AISettings } from '../api/ai';
+import type { AISettings } from '../api/ai';
 
 interface Props {
     isOpen: boolean;

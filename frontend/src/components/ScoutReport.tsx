@@ -1,101 +1,106 @@
 import React, { useState, useEffect } from 'react';
-import { useMassiveData } from '../hooks/useMassiveData';
+import { analyzeWithScout } from '../api/ai';
+import type { AISettings } from '../api/ai';
+import { getAISettings } from '../lib/idb';
 
 interface ScoutReportProps {
-    isOpen: boolean;
-    onClose: () => void;
     query: string;
 }
 
-export const ScoutReport: React.FC<ScoutReportProps> = ({ isOpen, onClose, query }) => {
+export const ScoutReport: React.FC<ScoutReportProps> = ({ query }) => {
     const [loading, setLoading] = useState(false);
-    const [reportData, setReportData] = useState<any>(null);
-    const { scoutAnalysis } = useMassiveData();
+    const [reportText, setReportText] = useState<string>('');
+    const [promptInput, setPromptInput] = useState<string>('');
+    const [settings, setSettings] = useState<AISettings | null>(null);
 
     useEffect(() => {
-        if (isOpen && query) {
-            setLoading(true);
-            setReportData(null);
+        getAISettings().then((s) => {
+            if (s) {
+                setSettings(s);
+            } else {
+                setSettings({ provider: 'gemini' }); // default fallback
+            }
+        });
+    }, []);
 
-            const fetchReport = async () => {
-                try {
-                    const res = await scoutAnalysis(query);
-                    // Mocking mapping for agentic response or reading real JSON if available
-                    if (res && res.result) {
-                         setReportData(res.result);
-                    } else {
-                         setReportData({
-                            summary: `Agent analysis for: ${query}`,
-                            metrics: [
-                                { label: "Data Source", value: "MCP" },
-                                { label: "Status", value: "No active content returned" }
-                            ],
-                            dataPoints: []
-                         });
-                    }
-                } catch (e) {
-                    console.error("MCP Fetch Error", e);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            fetchReport();
+    const handleAnalyze = async (promptToUse: string) => {
+        if (!promptToUse || !settings) return;
+        setLoading(true);
+        try {
+            const analysis = await analyzeWithScout(promptToUse, settings);
+            setReportText((prev) => prev ? `${prev}\n\nUser: ${promptToUse}\nScout: ${analysis}` : `User: ${promptToUse}\nScout: ${analysis}`);
+        } catch (e) {
+            console.error("Scout Analysis Error", e);
+            setReportText((prev) => prev ? `${prev}\n\nSystem: Failed to analyze. Check settings.` : `System: Failed to analyze. Check settings.`);
+        } finally {
+            setLoading(false);
         }
-    }, [isOpen, query, scoutAnalysis]);
+    };
 
-    if (!isOpen) return null;
+    const handleCustomPrompt = (e: React.FormEvent) => {
+        e.preventDefault();
+        handleAnalyze(promptInput);
+        setPromptInput('');
+    };
 
     return (
-        <div className="fixed inset-0 z-[70] flex justify-center items-center bg-black/50 backdrop-blur-sm p-4 fade-in" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="bg-white rounded-2xl w-full max-w-[600px] flex flex-col shadow-2xl overflow-hidden max-h-[85vh]">
-                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-ai-light text-ai-main flex items-center justify-center">
-                            <i className="fa-solid fa-binoculars"></i>
-                        </div>
-                        <h2 className="font-black text-lg text-gray-900 tracking-tight">Scout Report</h2>
+        <div className="bg-zinc-900 rounded-xl w-full flex flex-col shadow-sm overflow-hidden border border-zinc-800 flex-1">
+            <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-ai-dark text-ai-light flex items-center justify-center">
+                        <i className="fa-solid fa-binoculars"></i>
                     </div>
-                    <button onClick={onClose} className="w-8 h-8 bg-gray-50 rounded-full hover:bg-gray-100 transition flex items-center justify-center text-gray-500">
-                        <i className="fa-solid fa-xmark"></i>
+                    <h2 className="font-black text-sm text-zinc-100 tracking-tight">Scout AI</h2>
+                </div>
+            </div>
+            <div className="p-3 border-b border-zinc-800 flex gap-2 overflow-x-auto whitespace-nowrap bg-zinc-950">
+                <button
+                    onClick={() => handleAnalyze(`Analyze current ticker ${query}`)}
+                    className="px-3 py-1.5 text-[10px] font-bold bg-zinc-800 border border-zinc-700 rounded-md hover:border-ai-main text-zinc-300 transition"
+                >
+                    Analyze {query}
+                </button>
+                <button
+                    onClick={() => handleAnalyze(`Check RSI divergence for ${query}`)}
+                    className="px-3 py-1.5 text-[10px] font-bold bg-zinc-800 border border-zinc-700 rounded-md hover:border-ai-main text-zinc-300 transition"
+                >
+                    RSI Divergence
+                </button>
+                <button
+                    onClick={() => handleAnalyze(`What is the overall sentiment for ${query}?`)}
+                    className="px-3 py-1.5 text-[10px] font-bold bg-zinc-800 border border-zinc-700 rounded-md hover:border-ai-main text-zinc-300 transition"
+                >
+                    Sentiment
+                </button>
+            </div>
+            <div className="flex-1 p-4 overflow-y-auto bg-zinc-950 min-h-[200px] flex flex-col">
+                <textarea
+                    readOnly
+                    value={reportText}
+                    className="w-full flex-1 bg-transparent resize-none outline-none text-xs text-zinc-300 font-mono"
+                    placeholder="Scout standing by..."
+                />
+                {loading && (
+                    <div className="flex items-center gap-2 mt-4 text-ai-main">
+                        <div className="spinner !w-4 !h-4 !border-ai-dark !border-t-ai-main"></div>
+                        <span className="text-[10px] font-bold animate-pulse text-ai-main">Scouting...</span>
+                    </div>
+                )}
+            </div>
+            <div className="p-3 border-t border-zinc-800 bg-zinc-900">
+                <form onSubmit={handleCustomPrompt} className="flex gap-2">
+                    <input
+                        type="text"
+                        value={promptInput}
+                        onChange={(e) => setPromptInput(e.target.value)}
+                        placeholder="Ask Scout..."
+                        className="flex-1 border border-zinc-800 bg-zinc-950 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-ai-main placeholder-zinc-500"
+                    />
+                    <button type="submit" disabled={loading} className="bg-ai-main text-white px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-ai-dark transition disabled:opacity-50">
+                        Send
                     </button>
-                </div>
-                <div className="p-6 overflow-y-auto bg-gray-50/50">
-                    {loading ? (
-                        <div className="flex flex-col items-center justify-center py-8 gap-4">
-                            <div className="spinner !border-ai-light !border-t-ai-main"></div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Scouting Market Data...</p>
-                        </div>
-                    ) : reportData ? (
-                        <div className="flex flex-col gap-4 text-sm text-gray-800">
-                            <h3 className="font-bold text-lg mb-2">{reportData.summary}</h3>
-
-                            {reportData.metrics && (
-                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                    {reportData.metrics.map((m: any, i: number) => (
-                                        <div key={i} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                                            <div className="text-xs text-gray-500 uppercase tracking-wide">{m.label}</div>
-                                            <div className="font-bold text-lg">{m.value}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {reportData.dataPoints && (
-                                <ul className="list-disc pl-5 space-y-2">
-                                    {reportData.dataPoints.map((dp: string, i: number) => (
-                                        <li key={i}>{dp}</li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    ) : (
-                        <p className="text-center text-gray-500">Failed to load report.</p>
-                    )}
-                </div>
-                <div className="p-4 border-t border-gray-100 bg-white text-center">
-                    <p className="text-[10px] text-gray-400 font-medium">Powered by Massive MCP • Not Financial Advice</p>
-                </div>
+                </form>
+                <p className="text-[9px] text-zinc-600 font-medium text-center mt-2">Powered by {settings?.provider === 'lm-studio' ? 'LM Studio' : 'Gemini Cloud'} • Not Financial Advice</p>
             </div>
         </div>
     );

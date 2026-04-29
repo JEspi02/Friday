@@ -21,8 +21,8 @@ export const useChart = (data: Bar[]) => {
         };
 
         const chart = createChart(chartContainerRef.current, {
-            layout: { background: { color: '#ffffff' }, textColor: '#333' },
-            grid: { vertLines: { visible: false }, horzLines: { color: '#f0f0f0' } },
+            layout: { background: { color: 'transparent' }, textColor: '#a1a1aa' },
+            grid: { vertLines: { visible: false }, horzLines: { color: '#27272a' } },
             rightPriceScale: { borderVisible: false },
             timeScale: { borderVisible: false },
             height: 300,
