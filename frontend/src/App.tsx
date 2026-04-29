@@ -14,7 +14,7 @@ import type { AISettings } from './api/ai';
 import type { Bar } from './types';
 
 const App: React.FC = () => {
-    const { activeSymbol, chartTimeframe, newsData, setActiveSymbol, setChartTimeframe, setPortfolio, setWatchlist } = useStore();
+    const { activeSymbol, chartTimeframe, newsData, theme, setActiveSymbol, setChartTimeframe, setPortfolio, setWatchlist, setTheme } = useStore();
     const { fetchBars, fetchPortfolio, fetchWatchlist } = useMassiveData();
     const [bars, setBars] = useState<Bar[]>([]);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -66,20 +66,22 @@ const App: React.FC = () => {
     }, [activeSymbol, chartTimeframe, fetchBars]);
 
     return (
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 font-sans">
+        <div className={`min-h-screen bg-theme-bg-primary text-theme-text-primary p-4 font-sans transition-colors ${theme}`}>
             <header className="flex justify-between items-center mb-6 max-w-[1400px] mx-auto">
                 <h1 className="text-2xl font-black tracking-tighter">FRIDAY<span className="text-ai-main">.</span></h1>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                     <input
                         type="text"
                         value={activeSymbol}
                         onChange={e => setActiveSymbol(e.target.value.toUpperCase())}
-                        className="px-3 py-1 rounded border border-zinc-800 bg-zinc-900 font-bold uppercase w-24 text-center text-zinc-100 focus:outline-none focus:border-zinc-700"
+                        className="px-3 py-1 rounded border border-theme-border-primary bg-theme-bg-secondary font-bold uppercase w-24 text-center text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent transition-all"
+                        aria-label="Stock Ticker Symbol"
                     />
                     <select
                         value={chartTimeframe}
                         onChange={e => setChartTimeframe(e.target.value)}
-                        className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 font-bold text-zinc-100 focus:outline-none focus:border-zinc-700"
+                        className="px-2 py-1 rounded border border-theme-border-primary bg-theme-bg-secondary font-bold text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent transition-all"
+                        aria-label="Chart Timeframe"
                     >
                         <option value="1m">1m</option>
                         <option value="5m">5m</option>
@@ -88,16 +90,27 @@ const App: React.FC = () => {
                         <option value="4h">4h</option>
                         <option value="1D">1D</option>
                     </select>
+                    <select
+                        value={theme}
+                        onChange={e => setTheme(e.target.value as 'light' | 'dark' | 'sepia')}
+                        className="px-2 py-1 rounded border border-theme-border-primary bg-theme-bg-secondary font-bold text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent transition-all"
+                        aria-label="Application Theme"
+                    >
+                        <option value="dark">Dark Mode</option>
+                        <option value="light">Light Mode</option>
+                        <option value="sepia">Sepia Mode</option>
+                    </select>
                     <button
                         onClick={() => setSettingsOpen(true)}
-                        className="bg-zinc-800 text-zinc-300 px-3 py-1 rounded hover:bg-zinc-700 transition flex items-center justify-center"
+                        className="bg-theme-bg-secondary text-theme-text-primary border border-theme-border-primary px-3 py-1 rounded hover:bg-theme-bg-tertiary transition flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ai-main"
+                        aria-label="Open Settings"
                     >
                         <i className="fa-solid fa-gear"></i>
                     </button>
                 </div>
             </header>
 
-            <main className="max-w-[1400px] mx-auto grid grid-cols-12 gap-6">
+            <main className="max-w-[1400px] mx-auto grid grid-cols-12 gap-6" role="main">
                 <div className="col-span-12 md:col-span-3 lg:col-span-2 flex flex-col gap-6">
                     <Sidebar onSelect={setActiveSymbol} />
                     <Movers onSelect={setActiveSymbol} />
@@ -107,7 +120,7 @@ const App: React.FC = () => {
                     <OptionsChain ticker={activeSymbol} />
                 </div>
                 <div className="col-span-12 md:col-span-4 lg:col-span-3 flex flex-col gap-6 h-[800px] overflow-y-auto">
-                    <ScoutReport query={activeSymbol} />
+                    <ScoutReport query={activeSymbol} settings={aiSettings} />
                     <NewsFeed articles={newsData} />
                 </div>
             </main>

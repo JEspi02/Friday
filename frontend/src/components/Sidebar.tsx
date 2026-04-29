@@ -31,23 +31,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelect }) => {
     return (
         <div className="flex flex-col gap-6">
             <div>
-                <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-3">Portfolio</h3>
+                <h3 className="text-xs font-black text-theme-text-tertiary uppercase tracking-widest mb-3">Portfolio</h3>
                 <div className="flex flex-col gap-2">
                     {portfolio.map(sym => (
                         <button
                             key={sym}
                             onClick={() => onSelect(sym)}
-                            className="text-left font-bold px-3 py-2 bg-zinc-900 rounded-lg border border-zinc-800 hover:border-zinc-700 transition shadow-sm text-zinc-100"
+                            className="text-left font-bold px-3 py-2 bg-theme-bg-secondary rounded-lg border border-theme-border-primary hover:border-theme-border-secondary transition shadow-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent"
+                            aria-label={`Select ${sym} from portfolio`}
                         >
                             {sym}
                         </button>
                     ))}
-                    {portfolio.length === 0 && <p className="text-sm text-zinc-500">Empty</p>}
+                    {portfolio.length === 0 && <p className="text-sm text-theme-text-tertiary">Empty</p>}
                 </div>
             </div>
 
             <div>
-                <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-3">Watchlist</h3>
+                <h3 className="text-xs font-black text-theme-text-tertiary uppercase tracking-widest mb-3">Watchlist</h3>
                 <div className="mb-3">
                     <input
                         type="text"
@@ -55,7 +56,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelect }) => {
                         onChange={(e) => setNewTicker(e.target.value)}
                         onKeyDown={handleAddWatchlist}
                         placeholder="Add ticker..."
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-700 shadow-sm text-zinc-100 placeholder-zinc-500"
+                        className="w-full bg-theme-bg-secondary border border-theme-border-primary rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent shadow-sm text-theme-text-primary placeholder-theme-text-tertiary transition-all"
+                        aria-label="Add new ticker to watchlist"
                     />
                 </div>
                 <div className="flex flex-col gap-2">
@@ -63,12 +65,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelect }) => {
                         <button
                             key={sym}
                             onClick={() => onSelect(sym)}
-                            className="text-left font-bold px-3 py-2 bg-zinc-900 rounded-lg border border-zinc-800 hover:border-zinc-700 transition shadow-sm text-zinc-100"
+                            className="text-left font-bold px-3 py-2 bg-theme-bg-secondary rounded-lg border border-theme-border-primary hover:border-theme-border-secondary transition shadow-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent"
+                            aria-label={`Select ${sym} from watchlist`}
                         >
                             {sym}
                         </button>
                     ))}
-                    {watchlist.length === 0 && <p className="text-sm text-zinc-500">Empty</p>}
+                    {watchlist.length === 0 && <p className="text-sm text-theme-text-tertiary">Empty</p>}
                 </div>
             </div>
         </div>

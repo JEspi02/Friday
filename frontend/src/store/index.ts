@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import type { NewsArticle } from '../types';
 
+export type Theme = 'light' | 'dark' | 'sepia';
+
 interface AppState {
     portfolio: string[];
     watchlist: string[];
     activeSymbol: string;
     chartTimeframe: string;
     newsData: NewsArticle[];
+    theme: Theme;
 
     setPortfolio: (portfolio: string[]) => void;
     setWatchlist: (watchlist: string[]) => void;
@@ -14,6 +17,7 @@ interface AppState {
     setActiveSymbol: (symbol: string) => void;
     setChartTimeframe: (timeframe: string) => void;
     setNewsData: (news: NewsArticle[]) => void;
+    setTheme: (theme: Theme) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -23,6 +27,7 @@ export const useStore = create<AppState>()(
         activeSymbol: 'AAPL',
         chartTimeframe: '1D',
         newsData: [],
+        theme: 'dark',
 
         setPortfolio: (portfolio) => set({ portfolio }),
         setWatchlist: (watchlist) => set({ watchlist }),
@@ -34,5 +39,6 @@ export const useStore = create<AppState>()(
         setActiveSymbol: (activeSymbol) => set({ activeSymbol }),
         setChartTimeframe: (chartTimeframe) => set({ chartTimeframe }),
         setNewsData: (newsData) => set({ newsData }),
+        setTheme: (theme) => set({ theme }),
     })
 );
