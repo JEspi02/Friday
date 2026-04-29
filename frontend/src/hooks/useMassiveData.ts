@@ -3,9 +3,32 @@ import type { Bar, Quote } from '../types';
 import { getCachedBars, setCachedBars } from '../lib/idb';
 
 const API_BASE = '/api';
-const DEFAULT_USER_ID = 'default_user';
+
+// Simple in-memory token promise to prevent race conditions during initial load
+let _jwtTokenPromise: Promise<string> | null = null;
+
+const getAuthToken = async (): Promise<string> => {
+    if (_jwtTokenPromise) {
+        return _jwtTokenPromise;
+    }
+
+    _jwtTokenPromise = fetch(`${API_BASE}/auth/login`, { method: 'POST' })
+        .then(res => {
+            if (!res.ok) throw new Error("Failed to authenticate");
+            return res.json();
+        })
+        .then(data => data.access_token)
+        .catch(e => {
+            console.error(e);
+            _jwtTokenPromise = null; // reset on failure
+            return "";
+        });
+
+    return _jwtTokenPromise;
+};
 
 export const useMassiveData = () => {
+
     const fetchQuote = useCallback(async (ticker: string): Promise<Quote | null> => {
         try {
             const res = await fetch(`${API_BASE}/quote/${ticker}`);
@@ -26,14 +49,17 @@ export const useMassiveData = () => {
             const res = await fetch(`${API_BASE}/chart/${ticker}?interval=${timeframe}`);
             if (!res.ok) throw new Error('Failed to fetch bars');
             const data = await res.json();
-            if (data.results) {
+
+            // Backend now directly returns an array of ChartBar
+            if (Array.isArray(data)) {
                 // Ensure strictly ascending chronological data for lightweight-charts
-                const mapped = data.results.map((b: any) => ({
-                    time: b.t / 1000,
-                    open: b.o,
-                    high: b.h,
-                    low: b.l,
-                    close: b.c
+                const mapped = data.map((b: any) => ({
+                    time: b.time, // The backend field validator already ensures this is in seconds
+                    open: b.open,
+                    high: b.high,
+                    low: b.low,
+                    close: b.close,
+                    volume: b.volume
                 })).sort((a: any, b: any) => a.time - b.time);
                 await setCachedBars(cacheKey, mapped);
                 return mapped;
@@ -74,7 +100,11 @@ export const useMassiveData = () => {
 
     const fetchPortfolio = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/portfolio/${DEFAULT_USER_ID}`);
+            const token = await getAuthToken();
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`${API_BASE}/portfolio`, { headers });
             if(!res.ok) throw new Error('Failed to fetch portfolio');
             return await res.json();
         } catch(e) { console.error(e); return []; }
@@ -82,9 +112,13 @@ export const useMassiveData = () => {
 
     const savePortfolio = useCallback(async (symbols: string[]) => {
         try {
-            await fetch(`${API_BASE}/portfolio/${DEFAULT_USER_ID}`, {
+            const token = await getAuthToken();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            await fetch(`${API_BASE}/portfolio`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(symbols)
             });
         } catch(e) { console.error(e); }
@@ -92,7 +126,11 @@ export const useMassiveData = () => {
 
     const fetchWatchlist = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/watchlist/${DEFAULT_USER_ID}`);
+            const token = await getAuthToken();
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`${API_BASE}/watchlist`, { headers });
             if(!res.ok) throw new Error('Failed to fetch watchlist');
             return await res.json();
         } catch(e) { console.error(e); return []; }
@@ -100,9 +138,13 @@ export const useMassiveData = () => {
 
     const saveWatchlist = useCallback(async (symbols: string[]) => {
         try {
-            await fetch(`${API_BASE}/watchlist/${DEFAULT_USER_ID}`, {
+            const token = await getAuthToken();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            await fetch(`${API_BASE}/watchlist`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(symbols)
             });
         } catch(e) { console.error(e); }

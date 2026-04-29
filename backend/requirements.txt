@@ -5,3 +5,4 @@ massive>=2.6.0
 mcp
 python-dotenv
 openai
+PyJWT
