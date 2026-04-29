@@ -2,6 +2,8 @@ import os
 from datetime import datetime, timedelta
 from massive import RESTClient
 from dotenv import load_dotenv
+from core.database import get_cached_ohlcv, save_ohlcv_batch
+from core.models import ChartBar
 
 # 1. Call load_dotenv() to read the .env file
 load_dotenv()
@@ -14,13 +16,18 @@ except Exception as e:
     print(f"Failed to initialize Massive RESTClient: {e}")
     client = None
 
-def fetch_candlesticks(ticker: str, interval: str):
+def fetch_candlesticks(ticker: str, interval: str) -> list[ChartBar]:
     """
-    Fetch historical bars using Massive's list_aggs method.
+    Fetch historical bars using Massive's list_aggs method, protected by SQLite caching.
     Dynamically maps frontend intervals to Massive timespans and adjusts the lookback window.
     """
+    # First, try to read from the local SQLite cache
+    cached_data = get_cached_ohlcv(ticker, interval)
+    if cached_data and len(cached_data) > 0:
+        return [ChartBar(**bar) for bar in cached_data]
+
     if not client:
-        return {"results": []}
+        return []
 
     # Map frontend interval -> (multiplier, timespan, days_back_to_fetch)
     interval_map = {
@@ -51,17 +58,23 @@ def fetch_candlesticks(ticker: str, interval: str):
         results = []
         if response:
             for bar in response:
+                # Store the exact attributes expected by lightweight-charts
                 results.append({
-                    "t": bar.timestamp,
-                    "o": bar.open,
-                    "h": bar.high,
-                    "l": bar.low,
-                    "c": bar.close
+                    "time": bar.timestamp,
+                    "open": bar.open,
+                    "high": bar.high,
+                    "low": bar.low,
+                    "close": bar.close,
+                    "volume": bar.volume if hasattr(bar, 'volume') else 0
                 })
-        return {"results": results}
+
+            # Save the fresh data to our SQLite cache
+            save_ohlcv_batch(ticker, interval, results)
+
+        return [ChartBar(**bar) for bar in results]
     except Exception as e:
         print(f"Error fetching candlesticks for {ticker} ({interval}): {e}")
-        return {"results": []}
+        return []
     
 def fetch_quote(ticker: str):
     """

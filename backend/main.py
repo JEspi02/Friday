@@ -2,9 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import socketio
 import asyncio
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
+from fastapi import Depends
 from services.ai_service import scout
+from core.models import ChartBar
+from core.auth import create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
+from datetime import timedelta
 
 from services.massive_data import fetch_candlesticks, fetch_quote, fetch_options, fetch_movers
 from services.news_service import start_news_stream
@@ -47,11 +51,20 @@ async def startup_event():
     # Note: MCP connect should gracefully fail and fallback to mock if no MCP container is accessible
     await mcp_client.connect()
 
+@app.post("/api/auth/login")
+async def login():
+    # Simple login without credentials for now, representing 'default_user'
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": "default_user"}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
 
-@app.get("/api/chart/{ticker}")
+@app.get("/api/chart/{ticker}", response_model=List[ChartBar])
 async def get_chart(ticker: str, interval: str = "1D"):
     return fetch_candlesticks(ticker, interval)
 
@@ -72,21 +85,21 @@ async def ai_analysis(req: PromptRequest):
     result = await mcp_client.query_data(req.prompt)
     return result
 
-@app.get("/api/portfolio/{user_id}")
-async def fetch_portfolio(user_id: str):
+@app.get("/api/portfolio")
+async def fetch_portfolio(user_id: str = Depends(get_current_user)):
     return get_portfolio(user_id)
 
-@app.post("/api/portfolio/{user_id}")
-async def update_portfolio(user_id: str, symbols: list[str]):
+@app.post("/api/portfolio")
+async def update_portfolio(symbols: list[str], user_id: str = Depends(get_current_user)):
     save_portfolio(user_id, symbols)
     return {"status": "ok"}
 
-@app.get("/api/watchlist/{user_id}")
-async def fetch_watchlist(user_id: str):
+@app.get("/api/watchlist")
+async def fetch_watchlist(user_id: str = Depends(get_current_user)):
     return get_watchlist(user_id)
 
-@app.post("/api/watchlist/{user_id}")
-async def update_watchlist(user_id: str, symbols: list[str]):
+@app.post("/api/watchlist")
+async def update_watchlist(symbols: list[str], user_id: str = Depends(get_current_user)):
     save_watchlist(user_id, symbols)
     return {"status": "ok"}
 

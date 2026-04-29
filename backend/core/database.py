@@ -30,6 +30,21 @@ def init_db():
         )
     ''')
 
+    # Create ohlcv table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ohlcv (
+            symbol TEXT,
+            interval TEXT,
+            timestamp INTEGER,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            volume REAL,
+            UNIQUE(symbol, interval, timestamp)
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -72,6 +87,40 @@ def get_watchlist(user_id: str) -> list:
     if row:
         return json.loads(row['symbols'])
     return []
+
+def get_cached_ohlcv(symbol: str, interval: str) -> list:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT timestamp as time, open, high, low, close, volume
+        FROM ohlcv
+        WHERE symbol = ? AND interval = ?
+        ORDER BY timestamp ASC
+    ''', (symbol, interval))
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [dict(row) for row in rows]
+
+def save_ohlcv_batch(symbol: str, interval: str, bars: list):
+    if not bars:
+        return
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    records = [
+        (symbol, interval, bar['time'], bar['open'], bar['high'], bar['low'], bar['close'], bar['volume'])
+        for bar in bars
+    ]
+
+    cursor.executemany('''
+        INSERT OR IGNORE INTO ohlcv (symbol, interval, timestamp, open, high, low, close, volume)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', records)
+
+    conn.commit()
+    conn.close()
 
 # Initialize DB on load
 init_db()
