@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { createChart, CandlestickSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts';
 import type { Bar } from '../types';
+import type { Theme } from '../store';
 
-export const useChart = (data: Bar[]) => {
+export const useChart = (data: Bar[], theme: Theme) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     // Changed strict typing to any to prevent generic mismatch errors in v5
@@ -20,44 +21,67 @@ export const useChart = (data: Bar[]) => {
             }
         };
 
-        const chart = createChart(chartContainerRef.current, {
-            layout: { background: { color: '#ffffff' }, textColor: '#333' },
-            grid: { vertLines: { visible: false }, horzLines: { color: '#f0f0f0' } },
-            rightPriceScale: { borderVisible: false },
-            timeScale: { borderVisible: false },
-            height: 300,
-            width: chartContainerRef.current.clientWidth
-        });
+        const textColor = theme === 'light' ? '#4b5563' : theme === 'sepia' ? '#5c4b37' : '#a1a1aa';
+        const gridColor = theme === 'light' ? '#e5e7eb' : theme === 'sepia' ? '#cbb48f' : '#27272a';
 
-        // Use the new v5.0 API syntax
-        const series = chart.addSeries(CandlestickSeries, {
-            upColor: '#22c55e',
-            downColor: '#ef4444',
-            borderVisible: false,
-            wickUpColor: '#22c55e',
-            wickDownColor: '#ef4444'
-        });
+        if (!chartRef.current) {
+            const chart = createChart(chartContainerRef.current, {
+                layout: { background: { color: 'transparent' }, textColor: textColor },
+                grid: { vertLines: { visible: false }, horzLines: { color: gridColor } },
+                rightPriceScale: { borderVisible: false },
+                timeScale: { borderVisible: false },
+                height: 300,
+                width: chartContainerRef.current.clientWidth
+            });
 
-        chartRef.current = chart;
-        seriesRef.current = series;
+            // Use the new v5.0 API syntax
+            const series = chart.addSeries(CandlestickSeries, {
+                upColor: '#22c55e',
+                downColor: '#ef4444',
+                borderVisible: false,
+                wickUpColor: '#22c55e',
+                wickDownColor: '#ef4444'
+            });
 
-        window.addEventListener('resize', handleResize);
+            chartRef.current = chart;
+            seriesRef.current = series;
 
-        // Responsive ResizeObserver
-        const resizeObserver = new ResizeObserver(entries => {
-            if (entries[0].contentRect && chartRef.current) {
-                chartRef.current.applyOptions({
-                    width: entries[0].contentRect.width,
-                    height: entries[0].contentRect.height || 300
-                });
-            }
-        });
-        resizeObserver.observe(chartContainerRef.current);
+            window.addEventListener('resize', handleResize);
 
+            // Responsive ResizeObserver
+            const resizeObserver = new ResizeObserver(entries => {
+                if (entries[0].contentRect && chartRef.current) {
+                    chartRef.current.applyOptions({
+                        width: entries[0].contentRect.width,
+                        height: entries[0].contentRect.height || 300
+                    });
+                }
+            });
+            resizeObserver.observe(chartContainerRef.current);
+
+            // Clean up function attached to chart element
+            (chartContainerRef.current as any)._cleanup = () => {
+                window.removeEventListener('resize', handleResize);
+                resizeObserver.disconnect();
+                chart.remove();
+            };
+        } else {
+            // If chart already exists, just update the theme options
+            chartRef.current.applyOptions({
+                layout: { background: { color: 'transparent' }, textColor: textColor },
+                grid: { vertLines: { visible: false }, horzLines: { color: gridColor } }
+            });
+        }
+
+    }, [theme]);
+
+    useEffect(() => {
         return () => {
-            window.removeEventListener('resize', handleResize);
-            resizeObserver.disconnect();
-            chart.remove();
+             if (chartContainerRef.current && (chartContainerRef.current as any)._cleanup) {
+                 (chartContainerRef.current as any)._cleanup();
+                 chartRef.current = null;
+                 seriesRef.current = null;
+             }
         };
     }, []);
 

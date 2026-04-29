@@ -2,3 +2,41 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light Theme (Default fallback but we start in dark mode usually) */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f9fafb;
+    --bg-tertiary: #f3f4f6;
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-tertiary: #9ca3af;
+    --border-primary: #e5e7eb;
+    --border-secondary: #f3f4f6;
+  }
+
+  .dark {
+    /* Dark Theme */
+    --bg-primary: #09090b; /* zinc-950 */
+    --bg-secondary: #18181b; /* zinc-900 */
+    --bg-tertiary: #27272a; /* zinc-800 */
+    --text-primary: #f4f4f5; /* zinc-100 */
+    --text-secondary: #a1a1aa; /* zinc-400 */
+    --text-tertiary: #71717a; /* zinc-500 */
+    --border-primary: #27272a; /* zinc-800 */
+    --border-secondary: #3f3f46; /* zinc-700 */
+  }
+
+  .sepia {
+    /* Sepia Theme */
+    --bg-primary: #f4ecd8;
+    --bg-secondary: #eaddc5;
+    --bg-tertiary: #dccaa7;
+    --text-primary: #433422;
+    --text-secondary: #5c4b37;
+    --text-tertiary: #84725c;
+    --border-primary: #cbb48f;
+    --border-secondary: #b99e74;
+  }
+}

@@ -8,13 +8,29 @@ import { ScoutReport } from './components/ScoutReport';
 import { Sidebar } from './components/Sidebar';
 import { Movers } from './components/Movers';
 import { OptionsChain } from './components/OptionsChain';
+import { SettingsModal } from './components/SettingsModal';
+import { getAISettings, setAISettings } from './lib/idb';
+import type { AISettings } from './api/ai';
 import type { Bar } from './types';
 
 const App: React.FC = () => {
-    const { activeSymbol, chartTimeframe, newsData, setActiveSymbol, setChartTimeframe, setPortfolio, setWatchlist } = useStore();
+    const { activeSymbol, chartTimeframe, newsData, theme, setActiveSymbol, setChartTimeframe, setPortfolio, setWatchlist, setTheme } = useStore();
     const { fetchBars, fetchPortfolio, fetchWatchlist } = useMassiveData();
     const [bars, setBars] = useState<Bar[]>([]);
-    const [scoutOpen, setScoutOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [aiSettings, setAiSettings] = useState<AISettings>({ provider: 'gemini' });
+
+    useEffect(() => {
+        getAISettings().then(s => {
+            if (s) setAiSettings(s);
+        });
+    }, []);
+
+    const handleSaveSettings = async (settings: AISettings) => {
+        setAiSettings(settings);
+        await setAISettings(settings);
+        setSettingsOpen(false);
+    };
 
     useEffect(() => {
         // Init remote data
@@ -50,20 +66,22 @@ const App: React.FC = () => {
     }, [activeSymbol, chartTimeframe, fetchBars]);
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-800 p-4 font-sans">
-            <header className="flex justify-between items-center mb-6 max-w-6xl mx-auto">
+        <div className={`min-h-screen bg-theme-bg-primary text-theme-text-primary p-4 font-sans transition-colors ${theme}`}>
+            <header className="flex justify-between items-center mb-6 max-w-[1400px] mx-auto">
                 <h1 className="text-2xl font-black tracking-tighter">FRIDAY<span className="text-ai-main">.</span></h1>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                     <input
                         type="text"
                         value={activeSymbol}
                         onChange={e => setActiveSymbol(e.target.value.toUpperCase())}
-                        className="px-3 py-1 rounded border border-gray-200 font-bold uppercase w-24 text-center"
+                        className="px-3 py-1 rounded border border-theme-border-primary bg-theme-bg-secondary font-bold uppercase w-24 text-center text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent transition-all"
+                        aria-label="Stock Ticker Symbol"
                     />
                     <select
                         value={chartTimeframe}
                         onChange={e => setChartTimeframe(e.target.value)}
-                        className="px-2 py-1 rounded border border-gray-200 font-bold"
+                        className="px-2 py-1 rounded border border-theme-border-primary bg-theme-bg-secondary font-bold text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent transition-all"
+                        aria-label="Chart Timeframe"
                     >
                         <option value="1m">1m</option>
                         <option value="5m">5m</option>
@@ -72,33 +90,46 @@ const App: React.FC = () => {
                         <option value="4h">4h</option>
                         <option value="1D">1D</option>
                     </select>
-                    <button
-                        onClick={() => setScoutOpen(true)}
-                        className="bg-ai-main text-white px-4 py-1 rounded font-bold hover:bg-ai-dark transition flex items-center gap-2"
+                    <select
+                        value={theme}
+                        onChange={e => setTheme(e.target.value as 'light' | 'dark' | 'sepia')}
+                        className="px-2 py-1 rounded border border-theme-border-primary bg-theme-bg-secondary font-bold text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent transition-all"
+                        aria-label="Application Theme"
                     >
-                        <i className="fa-solid fa-binoculars"></i> Scout
+                        <option value="dark">Dark Mode</option>
+                        <option value="light">Light Mode</option>
+                        <option value="sepia">Sepia Mode</option>
+                    </select>
+                    <button
+                        onClick={() => setSettingsOpen(true)}
+                        className="bg-theme-bg-secondary text-theme-text-primary border border-theme-border-primary px-3 py-1 rounded hover:bg-theme-bg-tertiary transition flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ai-main"
+                        aria-label="Open Settings"
+                    >
+                        <i className="fa-solid fa-gear"></i>
                     </button>
                 </div>
             </header>
 
-            <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="md:col-span-1 border-r border-gray-100 pr-4">
+            <main className="max-w-[1400px] mx-auto grid grid-cols-12 gap-6" role="main">
+                <div className="col-span-12 md:col-span-3 lg:col-span-2 flex flex-col gap-6">
                     <Sidebar onSelect={setActiveSymbol} />
                     <Movers onSelect={setActiveSymbol} />
                 </div>
-                <div className="md:col-span-2 flex flex-col gap-6">
+                <div className="col-span-12 md:col-span-5 lg:col-span-7 flex flex-col gap-6">
                     <Chart data={bars} />
                     <OptionsChain ticker={activeSymbol} />
                 </div>
-                <div className="md:col-span-1 h-[600px] overflow-y-auto">
+                <div className="col-span-12 md:col-span-4 lg:col-span-3 flex flex-col gap-6 h-[800px] overflow-y-auto">
+                    <ScoutReport query={activeSymbol} settings={aiSettings} />
                     <NewsFeed articles={newsData} />
                 </div>
             </main>
 
-            <ScoutReport
-                isOpen={scoutOpen}
-                onClose={() => setScoutOpen(false)}
-                query={activeSymbol}
+            <SettingsModal
+                isOpen={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+                onSave={handleSaveSettings}
+                initialSettings={aiSettings}
             />
         </div>
     );
