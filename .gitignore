@@ -1,3 +1,19 @@
+# Node
 node_modules/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
 .env
+
+# DB
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs
 *.log
