@@ -41,8 +41,8 @@ const App: React.FC = () => {
         fetchWatchlist().then(w => { if (w && w.length) setWatchlist(w); });
 
         // Setup Socket.io connection for realtime news
-        // Note: Using relative path assumes standard deployment proxy or same origin
-        const socket = io();
+        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const socket = io(backendUrl);
 
         socket.on('news-update', (articles) => {
             if (articles && articles.length > 0) {

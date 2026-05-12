@@ -31,7 +31,8 @@ export const useTerminalStore = create<TerminalState>()((set) => ({
     addTicker: (symbol) => set((state) => {
         // Free tier restricts to 1 chart instance
         if (state.tier === 'FREE') {
-            return { activeTickers: [symbol] };
+            console.warn("Free tier limited to 1 chart. Upgrade to Premium.");
+            return state; // Do not modify state, let the UI handle the upsell
         }
         return { activeTickers: [...state.activeTickers, symbol] };
     }),

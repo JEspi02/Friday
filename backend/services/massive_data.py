@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from massive import RESTClient
 from dotenv import load_dotenv
 from core.database import get_cached_ohlcv, save_ohlcv_batch
@@ -43,7 +43,7 @@ def fetch_candlesticks(ticker: str, interval: str) -> list[ChartBar]:
     multiplier, timespan, days_back = interval_map.get(interval, (1, "day", 30))
 
     try:
-        end_date = datetime.now()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days_back)
         
         response = client.list_aggs(
@@ -60,7 +60,7 @@ def fetch_candlesticks(ticker: str, interval: str) -> list[ChartBar]:
             for bar in response:
                 # Store the exact attributes expected by lightweight-charts
                 results.append({
-                    "time": bar.timestamp,
+                    "time": int(bar.timestamp / 1000) if bar.timestamp > 9999999999 else int(bar.timestamp),
                     "open": bar.open,
                     "high": bar.high,
                     "low": bar.low,

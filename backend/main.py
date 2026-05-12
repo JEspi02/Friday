@@ -53,6 +53,7 @@ async def startup_event():
 
 @app.post("/api/auth/login")
 async def login():
+    # TODO: Integrate real authentication (OAuth, JWT verification with a DB, etc.) before pushing to production
     # Simple login without credentials for now, representing 'default_user'
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
