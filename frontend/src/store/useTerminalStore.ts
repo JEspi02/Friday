@@ -7,6 +7,7 @@ interface TerminalState {
     indicators: string[];
     isDrawingTrendline: boolean;
     analysisData: Record<string, any>;
+    savedDrawings: Record<string, any[]>;
 
     setTier: (tier: 'FREE' | 'PREMIUM') => void;
     setTicker: (index: number, symbol: string) => void;
@@ -16,6 +17,8 @@ interface TerminalState {
     toggleIndicator: (indicator: string) => void;
     setIsDrawingTrendline: (is: boolean) => void;
     setAnalysisData: (ticker: string, data: any) => void;
+    setSavedDrawings: (ticker: string, drawings: any[]) => void;
+    addSavedDrawing: (ticker: string, drawing: any) => void;
 }
 
 export const useTerminalStore = create<TerminalState>()((set) => ({
@@ -25,6 +28,7 @@ export const useTerminalStore = create<TerminalState>()((set) => ({
     indicators: [],
     isDrawingTrendline: false,
     analysisData: {},
+    savedDrawings: {},
 
     setTier: (tier) => set({ tier }),
 
@@ -65,4 +69,15 @@ export const useTerminalStore = create<TerminalState>()((set) => ({
     setAnalysisData: (ticker, data) => set((state) => ({
         analysisData: { ...state.analysisData, [ticker]: data }
     })),
+
+    setSavedDrawings: (ticker, drawings) => set((state) => ({
+        savedDrawings: { ...state.savedDrawings, [ticker]: drawings }
+    })),
+
+    addSavedDrawing: (ticker, drawing) => set((state) => {
+        const current = state.savedDrawings[ticker] || [];
+        return {
+            savedDrawings: { ...state.savedDrawings, [ticker]: [...current, drawing] }
+        };
+    }),
 }));

@@ -8,9 +8,10 @@ import { OptionsChain } from './OptionsChain';
 export const ChartTerminal: React.FC = () => {
     const {
         tier, activeTickers, timeframe, setTimeframe, setTier,
-        setAnalysisData, isDrawingTrendline, setIsDrawingTrendline, toggleIndicator
+        setAnalysisData, isDrawingTrendline, setIsDrawingTrendline, toggleIndicator,
+        setSavedDrawings
     } = useTerminalStore();
-    const { fetchBars, fetchAnalysis } = useMassiveData();
+    const { fetchBars, fetchAnalysis, fetchSavedDrawings, deleteDrawings } = useMassiveData();
 
     // In a real app, you would fetch and store bars for *each* activeTicker.
     // For this demonstration, we'll keep it simple and just show the first.
@@ -24,6 +25,9 @@ export const ChartTerminal: React.FC = () => {
                 const data = await fetchBars(ticker, timeframe);
                 newBars[ticker] = data;
 
+                const drawings = await fetchSavedDrawings(ticker);
+                setSavedDrawings(ticker, drawings);
+
                 if (tier === 'PREMIUM') {
                     const analysis = await fetchAnalysis(ticker, timeframe);
                     setAnalysisData(ticker, analysis);
@@ -32,7 +36,7 @@ export const ChartTerminal: React.FC = () => {
             setBars(newBars);
         };
         loadAllBars();
-    }, [activeTickers, timeframe, fetchBars, fetchAnalysis, tier, setAnalysisData]);
+    }, [activeTickers, timeframe, fetchBars, fetchAnalysis, fetchSavedDrawings, tier, setAnalysisData, setSavedDrawings]);
 
     const handleTimeframeChange = (tf: string) => {
         if (tier === 'FREE' && ['1m', '5m', '15m'].includes(tf)) {
@@ -92,6 +96,18 @@ export const ChartTerminal: React.FC = () => {
                         onClick={() => setIsDrawingTrendline(!isDrawingTrendline)}
                     >
                         <i className="fa-solid fa-chart-line"></i>
+                    </button>
+                    <button
+                        className="text-theme-text-secondary hover:text-red-500"
+                        title="Clear Drawings"
+                        onClick={() => {
+                            activeTickers.forEach(ticker => {
+                                deleteDrawings(ticker);
+                                setSavedDrawings(ticker, []);
+                            });
+                        }}
+                    >
+                        <i className="fa-solid fa-trash"></i>
                     </button>
                     <button
                         className={`text-theme-text-secondary ${tier === 'FREE' ? 'opacity-50 cursor-not-allowed' : 'hover:text-ai-main'}`}
