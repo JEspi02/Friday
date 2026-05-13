@@ -52,15 +52,24 @@ export const useMassiveData = () => {
 
             // Backend now directly returns an array of ChartBar
             if (Array.isArray(data)) {
+                interface RawBackendBar {
+                    time: number;
+                    open: number;
+                    high: number;
+                    low: number;
+                    close: number;
+                    volume: number;
+                }
+
                 // Ensure strictly ascending chronological data for lightweight-charts
-                const mapped = data.map((b: any) => ({
+                const mapped = data.map((b: RawBackendBar) => ({
                     time: b.time, // The backend field validator already ensures this is in seconds
                     open: b.open,
                     high: b.high,
                     low: b.low,
                     close: b.close,
                     volume: b.volume
-                })).sort((a: any, b: any) => a.time - b.time);
+                })).sort((a: RawBackendBar, b: RawBackendBar) => a.time - b.time);
                 await setCachedBars(cacheKey, mapped);
                 return mapped;
             }

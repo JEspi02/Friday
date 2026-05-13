@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useMassiveData } from '../hooks/useMassiveData';
 
+interface OptionContract {
+    details: {
+        contract_type: 'call' | 'put';
+        strike_price: number;
+    };
+    last_trade: { price: number };
+    day: { volume: number };
+}
+
 interface OptionsChainProps {
     ticker: string;
 }
 
 export const OptionsChain: React.FC<OptionsChainProps> = ({ ticker }) => {
     const { fetchOptions } = useMassiveData();
-    const [options, setOptions] = useState<any[]>([]);
+    const [options, setOptions] = useState<OptionContract[]>([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {

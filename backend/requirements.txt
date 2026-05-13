@@ -8,3 +8,5 @@ openai
 PyJWT
 pandas
 pandas-ta
+pytest
+httpx
