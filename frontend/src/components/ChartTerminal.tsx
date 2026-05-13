@@ -6,8 +6,11 @@ import type { Bar } from '../types';
 import { OptionsChain } from './OptionsChain';
 
 export const ChartTerminal: React.FC = () => {
-    const { tier, activeTickers, timeframe, setTimeframe, setTier } = useTerminalStore();
-    const { fetchBars } = useMassiveData();
+    const {
+        tier, activeTickers, timeframe, setTimeframe, setTier,
+        setAnalysisData, isDrawingTrendline, setIsDrawingTrendline, toggleIndicator
+    } = useTerminalStore();
+    const { fetchBars, fetchAnalysis } = useMassiveData();
 
     // In a real app, you would fetch and store bars for *each* activeTicker.
     // For this demonstration, we'll keep it simple and just show the first.
@@ -20,11 +23,16 @@ export const ChartTerminal: React.FC = () => {
             for (const ticker of activeTickers) {
                 const data = await fetchBars(ticker, timeframe);
                 newBars[ticker] = data;
+
+                if (tier === 'PREMIUM') {
+                    const analysis = await fetchAnalysis(ticker, timeframe);
+                    setAnalysisData(ticker, analysis);
+                }
             }
             setBars(newBars);
         };
         loadAllBars();
-    }, [activeTickers, timeframe, fetchBars]);
+    }, [activeTickers, timeframe, fetchBars, fetchAnalysis, tier, setAnalysisData]);
 
     const handleTimeframeChange = (tf: string) => {
         if (tier === 'FREE' && ['1m', '5m', '15m'].includes(tf)) {
@@ -78,11 +86,45 @@ export const ChartTerminal: React.FC = () => {
             <div className="flex flex-1 overflow-hidden">
                 {/* Left Toolbar */}
                 <div className="w-12 border-r border-theme-border-primary bg-theme-bg-secondary flex flex-col items-center py-2 gap-4">
-                    <button className="text-theme-text-secondary hover:text-ai-main" title="Trendline">
+                    <button
+                        className={`text-theme-text-secondary ${isDrawingTrendline ? 'text-ai-main' : 'hover:text-ai-main'}`}
+                        title="Trendline"
+                        onClick={() => setIsDrawingTrendline(!isDrawingTrendline)}
+                    >
                         <i className="fa-solid fa-chart-line"></i>
                     </button>
-                    <button className={`text-theme-text-secondary ${tier === 'FREE' ? 'opacity-50 cursor-not-allowed' : 'hover:text-ai-main'}`} title={tier === 'FREE' ? "Fibonacci (Premium)" : "Fibonacci"}>
+                    <button
+                        className={`text-theme-text-secondary ${tier === 'FREE' ? 'opacity-50 cursor-not-allowed' : 'hover:text-ai-main'}`}
+                        title={tier === 'FREE' ? "Fibonacci (Premium)" : "Fibonacci"}
+                        onClick={() => {
+                            if (tier === 'PREMIUM') {
+                                toggleIndicator('fibonacci');
+                            }
+                        }}
+                    >
                         <i className="fa-solid fa-layer-group"></i>
+                    </button>
+                    <button
+                        className={`text-theme-text-secondary ${tier === 'FREE' ? 'opacity-50 cursor-not-allowed' : 'hover:text-ai-main'}`}
+                        title={tier === 'FREE' ? "SMA 20 (Premium)" : "SMA 20"}
+                        onClick={() => {
+                            if (tier === 'PREMIUM') {
+                                toggleIndicator('sma20');
+                            }
+                        }}
+                    >
+                        <span className="text-[10px] font-bold">SMA</span>
+                    </button>
+                    <button
+                        className={`text-theme-text-secondary ${tier === 'FREE' ? 'opacity-50 cursor-not-allowed' : 'hover:text-ai-main'}`}
+                        title={tier === 'FREE' ? "EMA 50 (Premium)" : "EMA 50"}
+                        onClick={() => {
+                            if (tier === 'PREMIUM') {
+                                toggleIndicator('ema50');
+                            }
+                        }}
+                    >
+                        <span className="text-[10px] font-bold">EMA</span>
                     </button>
                 </div>
 
@@ -94,7 +136,7 @@ export const ChartTerminal: React.FC = () => {
                                 {ticker}
                             </div>
                             <div className="flex-1">
-                                <Chart data={bars[ticker] || []} />
+                                <Chart data={bars[ticker] || []} ticker={ticker} />
                             </div>
                         </div>
                     ))}

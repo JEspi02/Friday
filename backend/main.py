@@ -12,6 +12,7 @@ from datetime import timedelta
 
 from services.massive_data import fetch_candlesticks, fetch_quote, fetch_options, fetch_movers
 from services.news_service import start_news_stream
+from services.analysis_service import calculate_premium_indicators
 from core.mcp_client import mcp_client
 from core.database import get_portfolio, save_portfolio, get_watchlist, save_watchlist
 
@@ -63,6 +64,11 @@ async def login():
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+@app.get("/api/analysis/{ticker}")
+async def get_analysis(ticker: str, timeframe: str = "1D"):
+    bars = fetch_candlesticks(ticker, timeframe)
+    return calculate_premium_indicators(bars)
 
 @app.get("/api/chart/{ticker}", response_model=List[ChartBar])
 async def get_chart(ticker: str, interval: str = "1D"):

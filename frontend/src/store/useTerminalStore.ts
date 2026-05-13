@@ -5,6 +5,8 @@ interface TerminalState {
     activeTickers: string[];
     timeframe: string;
     indicators: string[];
+    isDrawingTrendline: boolean;
+    analysisData: Record<string, any>;
 
     setTier: (tier: 'FREE' | 'PREMIUM') => void;
     setTicker: (index: number, symbol: string) => void;
@@ -12,6 +14,8 @@ interface TerminalState {
     removeTicker: (index: number) => void;
     setTimeframe: (timeframe: string) => void;
     toggleIndicator: (indicator: string) => void;
+    setIsDrawingTrendline: (is: boolean) => void;
+    setAnalysisData: (ticker: string, data: any) => void;
 }
 
 export const useTerminalStore = create<TerminalState>()((set) => ({
@@ -19,6 +23,8 @@ export const useTerminalStore = create<TerminalState>()((set) => ({
     activeTickers: ['AAPL'],
     timeframe: '1D',
     indicators: [],
+    isDrawingTrendline: false,
+    analysisData: {},
 
     setTier: (tier) => set({ tier }),
 
@@ -53,4 +59,10 @@ export const useTerminalStore = create<TerminalState>()((set) => ({
         }
         return { indicators: [...state.indicators, indicator] };
     }),
+
+    setIsDrawingTrendline: (is) => set({ isDrawingTrendline: is }),
+
+    setAnalysisData: (ticker, data) => set((state) => ({
+        analysisData: { ...state.analysisData, [ticker]: data }
+    })),
 }));
