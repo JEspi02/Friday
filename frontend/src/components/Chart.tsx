@@ -19,7 +19,8 @@ export const Chart: React.FC<ChartProps> = ({ data, ticker }) => {
         data,
         theme,
         tier === 'PREMIUM' ? indicators : [],
-        tier === 'PREMIUM' ? tickerAnalysis : { indicators: {}, fibonacci: {} }
+        tier === 'PREMIUM' ? tickerAnalysis : { indicators: {}, fibonacci: {} },
+        ticker
     );
 
     return (

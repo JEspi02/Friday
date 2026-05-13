@@ -1,9 +1,15 @@
 import { useEffect, useRef } from 'react';
-import { createChart, CandlestickSeries, LineSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts';
+import { createChart, CandlestickSeries, LineSeries } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, MouseEventParams, Time } from 'lightweight-charts';
 import type { Bar } from '../types';
 import type { Theme } from '../store';
+import { TrendlinePrimitive } from '../lib/TrendlinePrimitive';
+import type { TrendlinePoint } from '../lib/TrendlinePrimitive';
+import { useMassiveData } from './useMassiveData';
+import { useTerminalStore } from '../store/useTerminalStore';
 
-export const useChart = (data: Bar[], theme: Theme, activeIndicators: string[], analysisData: any) => {
+
+export const useChart = (data: Bar[], theme: Theme, activeIndicators: string[], analysisData: any, ticker: string) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     // Changed strict typing to any to prevent generic mismatch errors in v5
@@ -12,6 +18,14 @@ export const useChart = (data: Bar[], theme: Theme, activeIndicators: string[], 
     // Store references to indicator series/lines so we can update or remove them
     const indicatorSeriesRef = useRef<Record<string, ISeriesApi<any>>>({});
     const fibLinesRef = useRef<any[]>([]);
+
+    const { savedDrawings, isDrawingTrendline, setIsDrawingTrendline, addSavedDrawing } = useTerminalStore();
+    const { saveDrawing } = useMassiveData();
+
+    // Store references to drawn trendlines
+    const trendlinesRef = useRef<TrendlinePrimitive[]>([]);
+    const activeTrendlineRef = useRef<TrendlinePrimitive | null>(null);
+    const clickStepRef = useRef<number>(0);
 
     useEffect(() => {
         if (!chartContainerRef.current) return;
@@ -161,6 +175,91 @@ export const useChart = (data: Bar[], theme: Theme, activeIndicators: string[], 
         }
 
     }, [activeIndicators, analysisData]);
+
+
+    // Sync historical drawings
+    useEffect(() => {
+        if (!seriesRef.current || !chartRef.current) return;
+
+        // Clear existing primitives
+        trendlinesRef.current.forEach(tl => {
+            if (seriesRef.current) {
+                try { seriesRef.current.detachPrimitive(tl); } catch(e) {}
+            }
+        });
+        trendlinesRef.current = [];
+
+        const tickerDrawings = savedDrawings[ticker] || [];
+        tickerDrawings.forEach(d => {
+            if (d.shape_type === 'trendline' && d.points.length === 2) {
+                const tl = new TrendlinePrimitive(d.points[0], d.points[1]);
+                seriesRef.current?.attachPrimitive(tl);
+                trendlinesRef.current.push(tl);
+            }
+        });
+
+    }, [savedDrawings, ticker, chartRef.current]);
+
+    // Handle interactive drawing
+    useEffect(() => {
+        if (!chartRef.current || !seriesRef.current) return;
+
+        const handleCrosshairMove = (param: MouseEventParams) => {
+            if (isDrawingTrendline && clickStepRef.current === 1 && activeTrendlineRef.current) {
+                if (param.time && param.point) {
+                    const price = seriesRef.current?.coordinateToPrice(param.point.y);
+                    if (price !== null && price !== undefined) {
+                        activeTrendlineRef.current.updateP2({ time: param.time as Time, price });
+                    }
+                }
+            }
+        };
+
+        const handleClick = (param: MouseEventParams) => {
+            if (!isDrawingTrendline) return;
+
+            if (param.time && param.point) {
+                const price = seriesRef.current?.coordinateToPrice(param.point.y);
+                if (price === null || price === undefined) return;
+
+                const pt: TrendlinePoint = { time: param.time as Time, price };
+
+                if (clickStepRef.current === 0) {
+                    // Start drawing
+                    const newTl = new TrendlinePrimitive(pt, pt);
+                    activeTrendlineRef.current = newTl;
+                    seriesRef.current?.attachPrimitive(newTl);
+                    clickStepRef.current = 1;
+                } else if (clickStepRef.current === 1 && activeTrendlineRef.current) {
+                    // Finalize drawing
+                    activeTrendlineRef.current.updateP2(pt);
+                    trendlinesRef.current.push(activeTrendlineRef.current);
+
+                    const payload = {
+                        shape_type: 'trendline',
+                        points: [activeTrendlineRef.current.p1, activeTrendlineRef.current.p2]
+                    };
+
+                    saveDrawing(ticker, payload);
+                    addSavedDrawing(ticker, payload);
+
+                    activeTrendlineRef.current = null;
+                    clickStepRef.current = 0;
+                    setIsDrawingTrendline(false);
+                }
+            }
+        };
+
+        chartRef.current.subscribeCrosshairMove(handleCrosshairMove);
+        chartRef.current.subscribeClick(handleClick);
+
+        return () => {
+            if (chartRef.current) {
+                chartRef.current.unsubscribeCrosshairMove(handleCrosshairMove);
+                chartRef.current.unsubscribeClick(handleClick);
+            }
+        };
+    }, [isDrawingTrendline, ticker, saveDrawing, addSavedDrawing, setIsDrawingTrendline]);
 
     return chartContainerRef;
 };

@@ -6,7 +6,6 @@ from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import Depends
 from services.ai_service import scout
-from core.models import ChartBar
 from core.auth import create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
 from datetime import timedelta
 
@@ -14,7 +13,9 @@ from services.massive_data import fetch_candlesticks, fetch_quote, fetch_options
 from services.news_service import start_news_stream
 from services.analysis_service import calculate_premium_indicators
 from core.mcp_client import mcp_client
-from core.database import get_portfolio, save_portfolio, get_watchlist, save_watchlist
+
+from core.models import ChartBar, DrawingCreate, DrawingResponse
+from core.database import get_portfolio, save_portfolio, get_watchlist, save_watchlist, save_drawing, get_drawings, delete_drawings
 
 app = FastAPI()
 
@@ -90,6 +91,19 @@ async def ai_analysis(req: PromptRequest):
     # Pass prompt to MCP server's query_data tool
     result = await mcp_client.query_data(req.prompt)
     return result
+
+@app.get("/api/drawings/{ticker}", response_model=List[DrawingResponse])
+async def fetch_drawings(ticker: str, user_id: str = Depends(get_current_user)):
+    return get_drawings(user_id, ticker)
+
+@app.post("/api/drawings/{ticker}", response_model=DrawingResponse)
+async def create_drawing(ticker: str, drawing: DrawingCreate, user_id: str = Depends(get_current_user)):
+    return save_drawing(user_id, ticker, drawing.model_dump())
+
+@app.delete("/api/drawings/{ticker}")
+async def remove_drawings(ticker: str, user_id: str = Depends(get_current_user)):
+    delete_drawings(user_id, ticker)
+    return {"status": "ok"}
 
 @app.get("/api/portfolio")
 async def fetch_portfolio(user_id: str = Depends(get_current_user)):

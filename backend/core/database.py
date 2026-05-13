@@ -1,5 +1,7 @@
 import sqlite3
 import json
+import uuid
+from datetime import datetime
 
 DB_PATH = 'friday.db'
 
@@ -42,6 +44,19 @@ def init_db():
             close REAL,
             volume REAL,
             UNIQUE(symbol, interval, timestamp)
+        )
+    ''')
+
+    # Create drawings table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS drawings (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            shape_type TEXT NOT NULL,
+            points TEXT NOT NULL,
+            metadata TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
@@ -119,6 +134,65 @@ def save_ohlcv_batch(symbol: str, interval: str, bars: list):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''', records)
 
+    conn.commit()
+    conn.close()
+
+def save_drawing(user_id: str, ticker: str, drawing_data: dict) -> dict:
+    conn = get_db()
+    cursor = conn.cursor()
+    drawing_id = str(uuid.uuid4())
+
+    cursor.execute('''
+        INSERT INTO drawings (id, user_id, ticker, shape_type, points, metadata)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (
+        drawing_id,
+        user_id,
+        ticker,
+        drawing_data['shape_type'],
+        json.dumps(drawing_data['points']),
+        json.dumps(drawing_data.get('metadata')) if drawing_data.get('metadata') else None
+    ))
+    conn.commit()
+
+    cursor.execute('SELECT * FROM drawings WHERE id = ?', (drawing_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    return {
+        "id": row['id'],
+        "ticker": row['ticker'],
+        "shape_type": row['shape_type'],
+        "points": json.loads(row['points']),
+        "metadata": json.loads(row['metadata']) if row['metadata'] else None,
+        "created_at": row['created_at']
+    }
+
+def get_drawings(user_id: str, ticker: str) -> list:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM drawings WHERE user_id = ? AND ticker = ? ORDER BY created_at ASC
+    ''', (user_id, ticker))
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = []
+    for row in rows:
+        result.append({
+            "id": row['id'],
+            "ticker": row['ticker'],
+            "shape_type": row['shape_type'],
+            "points": json.loads(row['points']),
+            "metadata": json.loads(row['metadata']) if row['metadata'] else None,
+            "created_at": row['created_at']
+        })
+    return result
+
+def delete_drawings(user_id: str, ticker: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM drawings WHERE user_id = ? AND ticker = ?', (user_id, ticker))
     conn.commit()
     conn.close()
 

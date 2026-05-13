@@ -162,6 +162,52 @@ export const useMassiveData = () => {
         }
     }, []);
 
+    const fetchSavedDrawings = useCallback(async (ticker: string) => {
+        try {
+            const token = await getAuthToken();
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`${API_BASE}/drawings/${ticker}`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch drawings');
+            return await res.json();
+        } catch (e) {
+            console.error(e);
+            return [];
+        }
+    }, []);
+
+    const saveDrawing = useCallback(async (ticker: string, payload: any) => {
+        try {
+            const token = await getAuthToken();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            await fetch(`${API_BASE}/drawings/${ticker}`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(payload)
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    }, []);
+
+    const deleteDrawings = useCallback(async (ticker: string) => {
+        try {
+            const token = await getAuthToken();
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            await fetch(`${API_BASE}/drawings/${ticker}`, {
+                method: 'DELETE',
+                headers
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    }, []);
+
     return {
         fetchQuote,
         fetchBars,
@@ -171,6 +217,9 @@ export const useMassiveData = () => {
         savePortfolio,
         fetchWatchlist,
         saveWatchlist,
-        fetchAnalysis
+        fetchAnalysis,
+        fetchSavedDrawings,
+        saveDrawing,
+        deleteDrawings
     };
 };
