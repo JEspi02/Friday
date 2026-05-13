@@ -13,10 +13,10 @@ export const useChart = (data: Bar[], theme: Theme, activeIndicators: string[], 
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     // Changed strict typing to any to prevent generic mismatch errors in v5
-    const seriesRef = useRef<ISeriesApi<any> | null>(null);
+    const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
     // Store references to indicator series/lines so we can update or remove them
-    const indicatorSeriesRef = useRef<Record<string, ISeriesApi<any>>>({});
+    const indicatorSeriesRef = useRef<Record<string, ISeriesApi<"Line">>>({});
     const fibLinesRef = useRef<any[]>([]);
 
     const { savedDrawings, isDrawingTrendline, setIsDrawingTrendline, addSavedDrawing } = useTerminalStore();

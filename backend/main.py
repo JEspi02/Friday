@@ -23,8 +23,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 class AIRequest(BaseModel):
@@ -35,7 +35,7 @@ class AIRequest(BaseModel):
     model_name: str = "lms-default"
 
 @app.post("/api/ai/analyze")
-async def analyze_market(req: AIRequest):
+async def analyze_market(req: AIRequest, user_id: str = Depends(get_current_user)):
     scout.initialize_client(
         provider=req.provider, 
         api_key=req.api_key, 
@@ -44,7 +44,14 @@ async def analyze_market(req: AIRequest):
     analysis = await scout.get_analysis(req.prompt, req.model_name)
     return {"analysis": analysis}
 
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+allowed_sio_origins = [
+    "http://localhost:3000", "http://127.0.0.1:3000",
+    "http://localhost:5173", "http://127.0.0.1:5173"
+]
+sio = socketio.AsyncServer(
+    async_mode='asgi',
+    cors_allowed_origins=allowed_sio_origins
+)
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 @app.on_event("startup")
@@ -67,27 +74,27 @@ async def health_check():
     return {"status": "ok"}
 
 @app.get("/api/analysis/{ticker}")
-async def get_analysis(ticker: str, timeframe: str = "1D"):
+def get_analysis(ticker: str, timeframe: str = "1D"):
     bars = fetch_candlesticks(ticker, timeframe)
     return calculate_premium_indicators(bars)
 
 @app.get("/api/chart/{ticker}", response_model=List[ChartBar])
-async def get_chart(ticker: str, interval: str = "1D"):
+def get_chart(ticker: str, interval: str = "1D"):
     return fetch_candlesticks(ticker, interval)
 
 @app.get("/api/quote/{ticker}")
-async def get_quote(ticker: str):
+def get_quote(ticker: str):
     return fetch_quote(ticker)
 
 @app.get("/api/options/{ticker}")
-async def get_options(ticker: str):
+def get_options(ticker: str):
     return fetch_options(ticker)
 
 class PromptRequest(BaseModel):
     prompt: str
 
 @app.post("/api/ai")
-async def ai_analysis(req: PromptRequest):
+async def ai_analysis(req: PromptRequest, user_id: str = Depends(get_current_user)):
     # Pass prompt to MCP server's query_data tool
     result = await mcp_client.query_data(req.prompt)
     return result
@@ -124,7 +131,7 @@ async def update_watchlist(symbols: list[str], user_id: str = Depends(get_curren
     return {"status": "ok"}
 
 @app.get("/api/movers")
-async def get_movers():
+def get_movers():
     # Now hitting the live Massive API!
     return fetch_movers()
 
