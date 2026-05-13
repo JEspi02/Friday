@@ -150,6 +150,18 @@ export const useMassiveData = () => {
         } catch(e) { console.error(e); }
     }, []);
 
+    const fetchAnalysis = useCallback(async (ticker: string, timeframe: string = '1D'): Promise<any> => {
+        try {
+            const response = await fetch(`${API_BASE}/analysis/${ticker}?timeframe=${timeframe}`);
+            if (!response.ok) return { indicators: {}, fibonacci: {} };
+            const data = await response.json();
+            return data;
+        } catch (e) {
+            console.error(e);
+            return { indicators: {}, fibonacci: {} };
+        }
+    }, []);
+
     return {
         fetchQuote,
         fetchBars,
@@ -158,6 +170,7 @@ export const useMassiveData = () => {
         fetchPortfolio,
         savePortfolio,
         fetchWatchlist,
-        saveWatchlist
+        saveWatchlist,
+        fetchAnalysis
     };
 };

@@ -6,3 +6,5 @@ mcp
 python-dotenv
 openai
 PyJWT
+pandas
+pandas-ta
