@@ -35,12 +35,15 @@ class AIRequest(BaseModel):
     model_name: str = "lms-default"
 
 @app.post("/api/ai/analyze")
-async def analyze_market(req: AIRequest, user_id: str = Depends(get_current_user)):
+async def analyze_market(req: AIRequest):
+    # Notice we removed the 'user_id' requirement above
+    
     scout.initialize_client(
         provider=req.provider, 
         api_key=req.api_key, 
         base_url=req.base_url
     )
+    
     analysis = await scout.get_analysis(req.prompt, req.model_name)
     return {"analysis": analysis}
 

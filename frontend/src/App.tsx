@@ -16,13 +16,14 @@ const App: React.FC = () => {
     const { newsData, theme, setPortfolio, setWatchlist, setTheme } = useStore();
     const { fetchPortfolio, fetchWatchlist } = useMassiveData();
 
-    // Wire old activeSymbol logic to new TerminalStore for sidebar syncing
+    // Wire activeSymbol logic
     const activeSymbol = useTerminalStore(state => state.activeTickers[0]);
     const setActiveSymbol = (symbol: string) => useTerminalStore.getState().setTicker(0, symbol);
 
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [aiSettings, setAiSettings] = useState<AISettings>({ provider: 'gemini' });
 
+    // 1. Initial Load for AI Settings
     useEffect(() => {
         getAISettings().then(s => {
             if (s) setAiSettings(s);
@@ -35,18 +36,33 @@ const App: React.FC = () => {
         setSettingsOpen(false);
     };
 
+    // 2. Main Initialization: Login + Data Fetching + Sockets
     useEffect(() => {
-        // Init remote data
-        fetchPortfolio().then(p => { if (p && p.length) setPortfolio(p); });
-        fetchWatchlist().then(w => { if (w && w.length) setWatchlist(w); });
+        const initApp = async () => {
+            // --- LOGIN LOGIC ---
+            try {
+                // Check if we already have a token to avoid unnecessary logins
+                if (!localStorage.getItem('token')) {
+                    const response = await fetch('/api/auth/login', { method: 'POST' });
+                    const data = await response.json();
+                    localStorage.setItem('token', data.access_token);
+                    console.log("✅ Token saved to localStorage");
+                }
+            } catch (error) {
+                console.error("Login failed:", error);
+            }
 
-        // Setup Socket.io connection for realtime news
-        // Note: Using relative path assumes standard deployment proxy or same origin
+            // --- DATA FETCHING ---
+            fetchPortfolio().then(p => { if (p && p.length) setPortfolio(p); });
+            fetchWatchlist().then(w => { if (w && w.length) setWatchlist(w); });
+        };
+
+        initApp();
+
+        // --- SOCKET SETUP ---
         const socket = io();
-
         socket.on('news-update', (articles) => {
             if (articles && articles.length > 0) {
-                // Prepend new articles using functional state update equivalent
                 useStore.setState((state) => {
                     const combined = [...articles, ...state.newsData];
                     const unique = Array.from(new Map(combined.map(item => [item.url, item])).values());
@@ -76,7 +92,6 @@ const App: React.FC = () => {
                         value={theme}
                         onChange={e => setTheme(e.target.value as 'light' | 'dark' | 'sepia')}
                         className="px-2 py-1 rounded border border-theme-border-primary bg-theme-bg-secondary font-bold text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-ai-main focus:border-transparent transition-all"
-                        aria-label="Application Theme"
                     >
                         <option value="dark">Dark Mode</option>
                         <option value="light">Light Mode</option>
@@ -84,15 +99,14 @@ const App: React.FC = () => {
                     </select>
                     <button
                         onClick={() => setSettingsOpen(true)}
-                        className="bg-theme-bg-secondary text-theme-text-primary border border-theme-border-primary px-3 py-1 rounded hover:bg-theme-bg-tertiary transition flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ai-main"
-                        aria-label="Open Settings"
+                        className="bg-theme-bg-secondary text-theme-text-primary border border-theme-border-primary px-3 py-1 rounded hover:bg-theme-bg-tertiary transition flex items-center justify-center"
                     >
                         <i className="fa-solid fa-gear"></i>
                     </button>
                 </div>
             </header>
 
-            <main className="max-w-[1600px] mx-auto grid grid-cols-12 gap-6" role="main">
+            <main className="max-w-[1600px] mx-auto grid grid-cols-12 gap-6">
                 <div className="col-span-12 md:col-span-3 lg:col-span-2 flex flex-col gap-6">
                     <Sidebar onSelect={setActiveSymbol} />
                     <Movers onSelect={setActiveSymbol} />

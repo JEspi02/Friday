@@ -6,9 +6,22 @@ export interface AISettings {
 }
 
 export const analyzeWithScout = async (prompt: string, settings: AISettings) => {
+    // 1. Retrieve the token from storage
+    const token = localStorage.getItem('token');
+
+    // 2. Build the headers dynamically
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+    };
+
+    // 3. Attach the Bearer token if it exists to satisfy backend auth requirements
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch('/api/ai/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify({
             prompt,
             provider: settings.provider,
